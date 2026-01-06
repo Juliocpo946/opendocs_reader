@@ -1,4 +1,4 @@
-package com.example.opendocs_reader.ui.theme
+package com.example.opendocs_reader.shared.theme
 
 import androidx.compose.ui.graphics.Color
 

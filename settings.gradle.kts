@@ -9,6 +9,7 @@ pluginManagement {
         }
         mavenCentral()
         gradlePluginPortal()
+        maven { url = uri("https://jitpack.io") }
     }
 }
 dependencyResolutionManagement {
@@ -16,9 +17,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // ESTA ES LA LÍNEA QUE FALTABA PARA QUE FUNCIONE EL PDF VIEWER
+        maven { url = uri("https://jitpack.io") }
     }
 }
 
 rootProject.name = "opendocs_reader"
 include(":app")
- 

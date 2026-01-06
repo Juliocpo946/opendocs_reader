@@ -10,12 +10,15 @@ android {
 
     defaultConfig {
         applicationId = "com.example.opendocs_reader"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // NECESARIO: Habilitar MultiDex para soportar el tamaño de Apache POI
+        multiDexEnabled = true
     }
 
     buildTypes {
@@ -37,6 +40,21 @@ android {
     buildFeatures {
         compose = true
     }
+
+    // NECESARIO: Exclusiones para evitar conflictos al compilar Apache POI
+    packaging {
+        resources {
+            excludes += "META-INF/DEPENDENCIES"
+            excludes += "META-INF/LICENSE"
+            excludes += "META-INF/LICENSE.txt"
+            excludes += "META-INF/license.txt"
+            excludes += "META-INF/NOTICE"
+            excludes += "META-INF/NOTICE.txt"
+            excludes += "META-INF/notice.txt"
+            excludes += "META-INF/ASL2.0"
+            excludes += "META-INF/*.kotlin_module"
+        }
+    }
 }
 
 dependencies {
@@ -49,6 +67,18 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.navigation.compose)
+
+    // --- Lector de Documentos (Dependencias añadidas) ---
+    // PDF (Visualizador Nativo)
+    implementation(libs.android.pdf.viewer)
+
+    // Office (DOCX, XLSX, PPTX - Procesamiento manual)
+    implementation(libs.apache.poi)
+    implementation(libs.apache.poi.ooxml)
+    implementation(libs.apache.xmlbeans)
+    // ----------------------------------------------------
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
