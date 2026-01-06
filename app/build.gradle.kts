@@ -67,6 +67,7 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.navigation.compose)
 
     // --- Lector de Documentos (Dependencias añadidas) ---
@@ -78,6 +79,11 @@ dependencies {
     implementation(libs.apache.poi.ooxml)
     implementation(libs.apache.xmlbeans)
     // ----------------------------------------------------
+
+    // Persistencia ligera (Para guardar los conteos y cargar rápido al inicio)
+    implementation("androidx.datastore:datastore-preferences:1.0.0")
+// Lifecycle y ViewModel
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
