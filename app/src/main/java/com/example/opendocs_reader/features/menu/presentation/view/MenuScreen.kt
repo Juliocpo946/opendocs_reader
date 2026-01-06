@@ -1,55 +1,55 @@
 package com.example.opendocs_reader.features.menu.presentation.view
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.example.opendocs_reader.core.navigation.Screen
 import com.example.opendocs_reader.features.home.presentation.view.HomeScreen
+import com.example.opendocs_reader.features.recent.presentation.view.RecentScreen
+import com.example.opendocs_reader.features.settings.presentation.view.SettingsScreen
 import com.example.opendocs_reader.shared.components.OpenDocsBottomBar
 import com.example.opendocs_reader.shared.components.OpenDocsTopBar
 
 @Composable
 fun MenuScreen() {
-    // Estado para saber qué pestaña está seleccionada (0=Inicio, 1=Reciente, 2=Ajustes)
-    var selectedItemIndex by remember { mutableIntStateOf(0) }
+    val menuNavController = rememberNavController()
+    val navBackStackEntry by menuNavController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+
+    val topBarTitle = when (currentRoute) {
+        Screen.Settings.route -> "Configuración"
+        Screen.Recent.route -> "Recientes"
+        else -> "OpenDocs"
+    }
 
     Scaffold(
-        topBar = { OpenDocsTopBar() },
+        topBar = {
+            OpenDocsTopBar(title = topBarTitle)
+        },
         bottomBar = {
-            // Pasamos el estado y la función para actualizarlo al BottomBar
-            OpenDocsBottomBar(
-                selectedIndex = selectedItemIndex,
-                onItemSelected = { index -> selectedItemIndex = index }
-            )
+            OpenDocsBottomBar(navController = menuNavController)
         }
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+    ) { paddingValues ->
+        NavHost(
+            navController = menuNavController,
+            startDestination = Screen.Home.route,
+            modifier = Modifier.padding(paddingValues)
         ) {
-            // Cambiamos el contenido según el índice seleccionado
-            when (selectedItemIndex) {
-                0 -> HomeScreen() // Nuestra nueva pantalla
-                1 -> PlaceholderScreen("Pantalla de Recientes")
-                2 -> PlaceholderScreen("Pantalla de Ajustes")
+            composable(route = Screen.Home.route) {
+                HomeScreen()
+            }
+            composable(route = Screen.Recent.route) {
+                RecentScreen()
+            }
+            composable(route = Screen.Settings.route) {
+                SettingsScreen()
             }
         }
-    }
-}
-
-// Un composable temporal para las pantallas que aún no hacemos
-@Composable
-fun PlaceholderScreen(text: String) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(text = text)
     }
 }

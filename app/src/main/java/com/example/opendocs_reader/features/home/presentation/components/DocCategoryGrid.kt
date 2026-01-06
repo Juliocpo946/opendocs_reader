@@ -2,11 +2,25 @@ package com.example.opendocs_reader.features.home.presentation.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Slideshow
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.TableChart
+import androidx.compose.material.icons.filled.TextSnippet
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -16,26 +30,44 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.opendocs_reader.features.home.domain.model.StorageStats
+import com.example.opendocs_reader.shared.theme.*
 
 @Composable
 fun DocCategoryGrid(stats: StorageStats, onCategoryClick: (String) -> Unit) {
     val categories = listOf(
-        CategoryUiModel("PDF", Icons.Default.PictureAsPdf, Color(0xFFE57373), stats.pdfCount),
-        CategoryUiModel("Word", Icons.Default.Description, Color(0xFF64B5F6), stats.wordCount),
-        CategoryUiModel("Excel", Icons.Default.TableChart, Color(0xFF81C784), stats.excelCount),
-        CategoryUiModel("Slide", Icons.Default.Slideshow, Color(0xFFFFB74D), stats.pptCount),
-        CategoryUiModel("Txt", Icons.Default.TextSnippet, Color(0xFF90A4AE), stats.txtCount),
-        CategoryUiModel("Favoritos", Icons.Default.Star, Color(0xFFFFC107), stats.favoritesCount)
+        CategoryUiModel("PDF", Icons.Default.PictureAsPdf, PdfColor, stats.pdfCount),
+        CategoryUiModel("Word", Icons.Default.Description, WordColor, stats.wordCount),
+        CategoryUiModel("Excel", Icons.Default.TableChart, ExcelColor, stats.excelCount),
+        CategoryUiModel("Slide", Icons.Default.Slideshow, PptColor, stats.pptCount),
+        CategoryUiModel("Txt", Icons.Default.TextSnippet, TxtColor, stats.txtCount),
+        CategoryUiModel("Favoritos", Icons.Default.Star, FavoriteColor, stats.favoritesCount)
     )
 
-    // Renderizamos las filas
-    Column {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            categories.take(3).forEach { CategoryItem(it, onCategoryClick) }
-        }
-        Spacer(modifier = Modifier.height(24.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            categories.drop(3).take(3).forEach { CategoryItem(it, onCategoryClick) }
+    val rows = categories.chunked(3)
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
+        rows.forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                rowItems.forEach { item ->
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CategoryItem(item, onCategoryClick)
+                    }
+                }
+                if (rowItems.size < 3) {
+                    repeat(3 - rowItems.size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
         }
     }
 }
@@ -43,7 +75,6 @@ fun DocCategoryGrid(stats: StorageStats, onCategoryClick: (String) -> Unit) {
 @Composable
 private fun CategoryItem(item: CategoryUiModel, onClick: (String) -> Unit) {
     Column(
-        modifier = Modifier.width(80.dp), // Ancho fijo para alineación
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
@@ -58,7 +89,7 @@ private fun CategoryItem(item: CategoryUiModel, onClick: (String) -> Unit) {
                 imageVector = item.icon,
                 contentDescription = item.name,
                 tint = item.color,
-                modifier = Modifier.size(30.dp)
+                modifier = Modifier.size(32.dp)
             )
         }
         Spacer(modifier = Modifier.height(8.dp))
@@ -75,7 +106,6 @@ private fun CategoryItem(item: CategoryUiModel, onClick: (String) -> Unit) {
     }
 }
 
-// Data class privada para la UI interna
 private data class CategoryUiModel(
     val name: String,
     val icon: ImageVector,

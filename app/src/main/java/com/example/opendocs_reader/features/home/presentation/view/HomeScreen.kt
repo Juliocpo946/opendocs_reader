@@ -12,7 +12,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -22,25 +21,29 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.opendocs_reader.features.home.data.repository.FileRepositoryImpl
 import com.example.opendocs_reader.features.home.presentation.components.DocCategoryGrid
 import com.example.opendocs_reader.features.home.presentation.components.StorageInfoBanner
 import com.example.opendocs_reader.features.home.presentation.viewmodel.HomeViewModel
+import com.example.opendocs_reader.features.home.presentation.viewmodel.HomeViewModelFactory
 
 @Composable
-fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
-    val uiState by viewModel.uiState.collectAsState()
+fun HomeScreen() {
     val context = LocalContext.current
+    val repository = remember { FileRepositoryImpl(context) }
+    val viewModel: HomeViewModel = viewModel(
+        factory = HomeViewModelFactory(repository)
+    )
+
+    val uiState by viewModel.uiState.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Launcher para ir a Ajustes si falta el permiso "especial"
     val storagePermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) {
-        // Al volver de ajustes, verificamos de nuevo
         viewModel.checkPermissions()
     }
 
-    // Detector de ciclo de vida: Si el usuario sale a dar permiso y vuelve, refrescamos.
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -57,7 +60,6 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
             .padding(16.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        // --- SECCIÓN 1: GRID DE DOCUMENTOS ---
         Text(
             text = "Documentos",
             style = MaterialTheme.typography.titleMedium,
@@ -65,17 +67,14 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
         )
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Usamos el componente fragmentado
         DocCategoryGrid(
             stats = uiState,
             onCategoryClick = { category ->
-                // Aquí pondrías la navegación a la lista filtrada
             }
         )
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // --- SECCIÓN 2: BANNER DE DETALLES ---
         Text(
             text = "Detalles de Almacenamiento",
             style = MaterialTheme.typography.titleSmall,
@@ -83,11 +82,8 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
         )
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Usamos el componente fragmentado
         StorageInfoBanner(stats = uiState)
 
-        // --- SECCIÓN 3: BOTÓN DE PERMISO (Si falta) ---
-        // Si no tiene permisos, mostramos un botón para pedirlo
         if (!hasStoragePermission()) {
             Spacer(modifier = Modifier.height(24.dp))
             Button(
@@ -97,7 +93,6 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
                         intent.data = Uri.parse("package:${context.packageName}")
                         storagePermissionLauncher.launch(intent)
                     } else {
-                        // Lógica para Android 10 o inferior (ya cubierta por el manifest legacy)
                         viewModel.checkPermissions()
                     }
                 },
@@ -110,12 +105,11 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
     }
 }
 
-// Función auxiliar simple para verificar permiso en la UI
 @Composable
 fun hasStoragePermission(): Boolean {
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         Environment.isExternalStorageManager()
     } else {
-        true // En versiones viejas el Manifest se encarga
+        true
     }
 }

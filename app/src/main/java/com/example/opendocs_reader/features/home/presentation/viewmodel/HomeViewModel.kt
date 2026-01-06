@@ -1,19 +1,16 @@
 package com.example.opendocs_reader.features.home.presentation.viewmodel
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.opendocs_reader.features.home.data.repository.FileRepositoryImpl
 import com.example.opendocs_reader.features.home.domain.model.StorageStats
+import com.example.opendocs_reader.features.home.domain.repository.FileRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class HomeViewModel(application: Application) : AndroidViewModel(application) {
-
-    // Instancia manual del repo (idealmente usarías Hilt aquí)
-    private val repository = FileRepositoryImpl(application)
+class HomeViewModel(private val repository: FileRepository) : ViewModel() {
 
     private val _uiState = MutableStateFlow(StorageStats())
     val uiState: StateFlow<StorageStats> = _uiState.asStateFlow()
@@ -21,10 +18,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _hasPermission = MutableStateFlow(false)
 
     init {
-        // 1. Cargar caché inmediatamente (Local Storage)
         viewModelScope.launch {
             repository.getCachedStats().collect { cachedStats ->
-                // Solo actualizamos si no estamos en medio de un escaneo manual que tenga datos más frescos
                 _uiState.value = cachedStats
             }
         }
@@ -37,24 +32,28 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // En HomeViewModel.kt
     fun checkPermissions() {
         val isGranted = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             android.os.Environment.isExternalStorageManager()
         } else {
-            true // Asumimos true en legacy por simplificación, o usa ContextCompat check
+            true
         }
-
         updatePermissionStatus(isGranted)
     }
 
-    // 2. Verificar cambios de manera innotoria
     private fun refreshData() {
         viewModelScope.launch {
-            // Esto corre en IO, analiza archivos y si encuentra nuevos,
-            // actualiza el DataStore, lo cual dispara el collect del init automáticamente.
-            // ¡Magia reactiva! No refresca la pantalla completa, solo los números cambian.
             repository.scanAndRefreshStats()
         }
+    }
+}
+
+class HomeViewModelFactory(private val repository: FileRepository) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(HomeViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return HomeViewModel(repository) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }

@@ -13,26 +13,27 @@ import androidx.navigation.compose.rememberNavController
 import com.example.opendocs_reader.core.navigation.Screen
 import com.example.opendocs_reader.features.menu.presentation.view.MenuScreen
 import com.example.opendocs_reader.features.splash.presentation.view.SplashScreen
-import com.example.opendocs_reader.shared.theme.Opendocs_readerTheme
+import com.example.opendocs_reader.shared.theme.OpenDocsReaderTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            Opendocs_readerTheme {
+            OpenDocsReaderTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    val navController = rememberNavController()
+                    val mainNavController = rememberNavController()
 
                     NavHost(
-                        navController = navController,
+                        navController = mainNavController,
                         startDestination = Screen.Splash.route
                     ) {
                         composable(route = Screen.Splash.route) {
-                            SplashScreen(navController = navController)
+                            SplashScreen(navController = mainNavController)
                         }
+
                         composable(route = Screen.Menu.route) {
                             MenuScreen()
                         }

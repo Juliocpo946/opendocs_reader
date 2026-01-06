@@ -21,7 +21,7 @@ class FileRepositoryImpl(private val context: Context) : FileRepository {
 
     private object Keys {
         val TOTAL_FILES = intPreferencesKey("total_files")
-        val DOCS_BYTES = longPreferencesKey("docs_bytes") // Renombrado
+        val DOCS_BYTES = longPreferencesKey("docs_bytes")
         val PDF_COUNT = intPreferencesKey("pdf_count")
         val WORD_COUNT = intPreferencesKey("word_count")
         val EXCEL_COUNT = intPreferencesKey("excel_count")
@@ -31,7 +31,6 @@ class FileRepositoryImpl(private val context: Context) : FileRepository {
 
     override fun getCachedStats(): Flow<StorageStats> {
         return context.dataStore.data.map { prefs ->
-            // Leemos también el espacio del dispositivo al vuelo (es rápido)
             val (total, free) = getDeviceStorageInfo()
 
             StorageStats(
@@ -69,7 +68,6 @@ class FileRepositoryImpl(private val context: Context) : FileRepository {
         var pdf = 0; var word = 0; var excel = 0; var ppt = 0; var txt = 0
         var docsSize = 0L
 
-        // Obtener capacidad del sistema
         val (deviceTotal, deviceFree) = getDeviceStorageInfo()
 
         val projection = arrayOf(
@@ -93,7 +91,6 @@ class FileRepositoryImpl(private val context: Context) : FileRepository {
                     val size = cursor.getLong(sizeCol)
                     val name = cursor.getString(nameCol)?.lowercase() ?: ""
 
-                    // Contar solo documentos válidos
                     if (mime.contains("pdf")) { pdf++; docsSize += size }
                     else if (mime.contains("word") || name.endsWith(".doc") || name.endsWith(".docx")) { word++; docsSize += size }
                     else if (mime.contains("sheet") || mime.contains("excel") || name.endsWith(".xls") || name.endsWith(".xlsx")) { excel++; docsSize += size }
@@ -113,7 +110,6 @@ class FileRepositoryImpl(private val context: Context) : FileRepository {
         )
     }
 
-    // Helper para obtener espacio real del teléfono usando StatFs
     private fun getDeviceStorageInfo(): Pair<Long, Long> {
         return try {
             val path = Environment.getDataDirectory()
