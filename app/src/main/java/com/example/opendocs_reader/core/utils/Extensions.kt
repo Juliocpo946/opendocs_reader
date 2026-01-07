@@ -1,7 +1,9 @@
 package com.example.opendocs_reader.core.utils
 
-import com.example.opendocs_reader.features.home.domain.model.StorageStats
+import android.annotation.SuppressLint
+import com.example.opendocs_reader.core.domain.model.StorageStats
 
+@SuppressLint("DefaultLocale")
 fun Long.formatSize(): String {
     val kb = this / 1024.0
     val mb = kb / 1024.0

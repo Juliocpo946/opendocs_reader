@@ -7,10 +7,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.opendocs_reader.core.navigation.Screen
+import com.example.opendocs_reader.features.files.presentation.view.FilesScreen
 import com.example.opendocs_reader.features.menu.presentation.view.MenuScreen
 import com.example.opendocs_reader.features.splash.presentation.view.SplashScreen
 import com.example.opendocs_reader.shared.theme.OpenDocsReaderTheme
@@ -35,7 +38,15 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable(route = Screen.Menu.route) {
-                            MenuScreen()
+                            MenuScreen(rootNavController = mainNavController)
+                        }
+
+                        composable(
+                            route = Screen.Files.route,
+                            arguments = listOf(navArgument("category") { type = NavType.StringType })
+                        ) { backStackEntry ->
+                            val category = backStackEntry.arguments?.getString("category") ?: "Todos"
+                            FilesScreen(navController = mainNavController, initialCategory = category)
                         }
                     }
                 }

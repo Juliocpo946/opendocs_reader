@@ -2,22 +2,8 @@ package com.example.opendocs_reader.features.home.presentation.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material.icons.filled.Slideshow
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.TableChart
-import androidx.compose.material.icons.filled.TextSnippet
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,24 +12,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.opendocs_reader.features.home.domain.model.StorageStats
-import com.example.opendocs_reader.shared.theme.*
+import com.example.opendocs_reader.core.domain.model.StorageStats
+import com.example.opendocs_reader.core.utils.CategoryDef
+import com.example.opendocs_reader.core.utils.CategoryUtils
 
 @Composable
 fun DocCategoryGrid(stats: StorageStats, onCategoryClick: (String) -> Unit) {
-    val categories = listOf(
-        CategoryUiModel("PDF", Icons.Default.PictureAsPdf, PdfColor, stats.pdfCount),
-        CategoryUiModel("Word", Icons.Default.Description, WordColor, stats.wordCount),
-        CategoryUiModel("Excel", Icons.Default.TableChart, ExcelColor, stats.excelCount),
-        CategoryUiModel("Slide", Icons.Default.Slideshow, PptColor, stats.pptCount),
-        CategoryUiModel("Txt", Icons.Default.TextSnippet, TxtColor, stats.txtCount),
-        CategoryUiModel("Favoritos", Icons.Default.Star, FavoriteColor, stats.favoritesCount)
-    )
-
-    val rows = categories.chunked(3)
+    val rows = CategoryUtils.categories.chunked(3)
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -59,7 +36,8 @@ fun DocCategoryGrid(stats: StorageStats, onCategoryClick: (String) -> Unit) {
                         modifier = Modifier.weight(1f),
                         contentAlignment = Alignment.Center
                     ) {
-                        CategoryItem(item, onCategoryClick)
+                        val count = CategoryUtils.getCountForCategory(stats, item.id)
+                        CategoryItem(item, count, onCategoryClick)
                     }
                 }
                 if (rowItems.size < 3) {
@@ -73,7 +51,7 @@ fun DocCategoryGrid(stats: StorageStats, onCategoryClick: (String) -> Unit) {
 }
 
 @Composable
-private fun CategoryItem(item: CategoryUiModel, onClick: (String) -> Unit) {
+private fun CategoryItem(item: CategoryDef, count: Int, onClick: (String) -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -82,7 +60,7 @@ private fun CategoryItem(item: CategoryUiModel, onClick: (String) -> Unit) {
                 .size(64.dp)
                 .clip(CircleShape)
                 .background(item.color.copy(alpha = 0.15f))
-                .clickable { onClick(item.name) },
+                .clickable { onClick(item.id) },
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -99,16 +77,9 @@ private fun CategoryItem(item: CategoryUiModel, onClick: (String) -> Unit) {
             fontWeight = FontWeight.Medium
         )
         Text(
-            text = "${item.count}",
+            text = "$count",
             style = MaterialTheme.typography.labelSmall,
             color = Color.Gray
         )
     }
 }
-
-private data class CategoryUiModel(
-    val name: String,
-    val icon: ImageVector,
-    val color: Color,
-    val count: Int
-)

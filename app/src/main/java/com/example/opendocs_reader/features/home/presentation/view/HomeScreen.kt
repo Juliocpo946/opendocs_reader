@@ -21,16 +21,21 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.opendocs_reader.features.home.data.repository.FileRepositoryImpl
+import androidx.navigation.NavController
+import com.example.opendocs_reader.core.data.repository.StatsRepositoryImpl
+import com.example.opendocs_reader.core.navigation.Screen
 import com.example.opendocs_reader.features.home.presentation.components.DocCategoryGrid
 import com.example.opendocs_reader.features.home.presentation.components.StorageInfoBanner
 import com.example.opendocs_reader.features.home.presentation.viewmodel.HomeViewModel
 import com.example.opendocs_reader.features.home.presentation.viewmodel.HomeViewModelFactory
 
 @Composable
-fun HomeScreen() {
+fun HomeScreen(rootNavController: NavController) {
     val context = LocalContext.current
-    val repository = remember { FileRepositoryImpl(context) }
+
+    // Inyección manual del repositorio correcto
+    val repository = remember { StatsRepositoryImpl(context) }
+
     val viewModel: HomeViewModel = viewModel(
         factory = HomeViewModelFactory(repository)
     )
@@ -70,6 +75,7 @@ fun HomeScreen() {
         DocCategoryGrid(
             stats = uiState,
             onCategoryClick = { category ->
+                rootNavController.navigate(Screen.Files.createRoute(category))
             }
         )
 

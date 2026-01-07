@@ -31,7 +31,7 @@ val BackgroundDark = Color(0xFF1A1C1E)
 val OnBackgroundDark = Color(0xFFE2E2E6)
 val SurfaceDark = Color(0xFF1A1C1E)
 val OnSurfaceDark = Color(0xFFE2E2E6)
-
+val AllFilesColor = Color(0xFF5C6BC0)
 val PdfColor = Color(0xFFE57373)
 val WordColor = Color(0xFF64B5F6)
 val ExcelColor = Color(0xFF81C784)

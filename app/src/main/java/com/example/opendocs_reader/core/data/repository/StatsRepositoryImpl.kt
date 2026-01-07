@@ -1,4 +1,4 @@
-package com.example.opendocs_reader.features.home.data.repository
+package com.example.opendocs_reader.core.data.repository
 
 import android.content.Context
 import android.os.Environment
@@ -8,16 +8,17 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import com.example.opendocs_reader.features.home.domain.model.StorageStats
-import com.example.opendocs_reader.features.home.domain.repository.FileRepository
+import com.example.opendocs_reader.core.domain.model.StorageStats
+import com.example.opendocs_reader.core.domain.repository.StatsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
-private val Context.dataStore by preferencesDataStore(name = "file_stats_cache")
+// DataStore exclusivo para cache de estadísticas
+private val Context.statsDataStore by preferencesDataStore(name = "file_stats_cache")
 
-class FileRepositoryImpl(private val context: Context) : FileRepository {
+class StatsRepositoryImpl(private val context: Context) : StatsRepository {
 
     private object Keys {
         val TOTAL_FILES = intPreferencesKey("total_files")
@@ -30,9 +31,8 @@ class FileRepositoryImpl(private val context: Context) : FileRepository {
     }
 
     override fun getCachedStats(): Flow<StorageStats> {
-        return context.dataStore.data.map { prefs ->
+        return context.statsDataStore.data.map { prefs ->
             val (total, free) = getDeviceStorageInfo()
-
             StorageStats(
                 totalFiles = prefs[Keys.TOTAL_FILES] ?: 0,
                 docsUsedBytes = prefs[Keys.DOCS_BYTES] ?: 0L,
@@ -50,9 +50,8 @@ class FileRepositoryImpl(private val context: Context) : FileRepository {
 
     override suspend fun scanAndRefreshStats() {
         withContext(Dispatchers.IO) {
-            val scanResult = queryFileSystem()
-
-            context.dataStore.edit { prefs ->
+            val scanResult = queryFileSystemStats()
+            context.statsDataStore.edit { prefs ->
                 prefs[Keys.TOTAL_FILES] = scanResult.totalFiles
                 prefs[Keys.DOCS_BYTES] = scanResult.docsUsedBytes
                 prefs[Keys.PDF_COUNT] = scanResult.pdfCount
@@ -64,18 +63,33 @@ class FileRepositoryImpl(private val context: Context) : FileRepository {
         }
     }
 
-    private fun queryFileSystem(): StorageStats {
+    private fun queryFileSystemStats(): StorageStats {
         var pdf = 0; var word = 0; var excel = 0; var ppt = 0; var txt = 0
         var docsSize = 0L
 
-        val (deviceTotal, deviceFree) = getDeviceStorageInfo()
+        // Filtros SQL optimizados (Solo lo soportado)
+        val selection = "(" +
+                "${MediaStore.Files.FileColumns.MIME_TYPE} LIKE '%pdf%' OR " +
+                "${MediaStore.Files.FileColumns.MIME_TYPE} LIKE '%word%' OR " +
+                "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE '%.doc' OR " +
+                "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE '%.docx' OR " +
+                "${MediaStore.Files.FileColumns.MIME_TYPE} LIKE '%sheet%' OR " +
+                "${MediaStore.Files.FileColumns.MIME_TYPE} LIKE '%excel%' OR " +
+                "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE '%.xls' OR " +
+                "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE '%.xlsx' OR " +
+                "${MediaStore.Files.FileColumns.MIME_TYPE} LIKE '%presentation%' OR " +
+                "${MediaStore.Files.FileColumns.MIME_TYPE} LIKE '%powerpoint%' OR " +
+                "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE '%.ppt' OR " +
+                "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE '%.pptx' OR " +
+                "${MediaStore.Files.FileColumns.MIME_TYPE} LIKE '%text%' OR " +
+                "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE '%.txt'" +
+                ")"
 
         val projection = arrayOf(
             MediaStore.Files.FileColumns.MIME_TYPE,
             MediaStore.Files.FileColumns.SIZE,
             MediaStore.Files.FileColumns.DISPLAY_NAME
         )
-        val selection = "${MediaStore.Files.FileColumns.MIME_TYPE} IS NOT NULL"
 
         try {
             context.contentResolver.query(
@@ -100,6 +114,8 @@ class FileRepositoryImpl(private val context: Context) : FileRepository {
             }
         } catch (e: Exception) { e.printStackTrace() }
 
+        val (deviceTotal, deviceFree) = getDeviceStorageInfo()
+
         return StorageStats(
             totalFiles = pdf + word + excel + ppt + txt,
             docsUsedBytes = docsSize,
@@ -114,15 +130,7 @@ class FileRepositoryImpl(private val context: Context) : FileRepository {
         return try {
             val path = Environment.getDataDirectory()
             val stat = StatFs(path.path)
-            val blockSize = stat.blockSizeLong
-            val totalBlocks = stat.blockCountLong
-            val availableBlocks = stat.availableBlocksLong
-
-            val total = totalBlocks * blockSize
-            val free = availableBlocks * blockSize
-            Pair(total, free)
-        } catch (e: Exception) {
-            Pair(0L, 0L)
-        }
+            Pair(stat.blockCountLong * stat.blockSizeLong, stat.availableBlocksLong * stat.blockSizeLong)
+        } catch (_: Exception) { Pair(0L, 0L) }
     }
 }

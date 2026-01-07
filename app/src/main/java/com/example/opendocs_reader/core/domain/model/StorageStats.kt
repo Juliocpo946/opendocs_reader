@@ -1,4 +1,4 @@
-package com.example.opendocs_reader.features.home.domain.model
+package com.example.opendocs_reader.core.domain.model
 
 data class StorageStats(
     val totalFiles: Int = 0,

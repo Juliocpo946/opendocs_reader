@@ -11,7 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.opendocs_reader.features.home.domain.model.StorageStats
+import com.example.opendocs_reader.core.domain.model.StorageStats
 import com.example.opendocs_reader.core.utils.formatSize
 import com.example.opendocs_reader.core.utils.getDeviceUsageProgress
 
