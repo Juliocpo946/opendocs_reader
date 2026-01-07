@@ -10,6 +10,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.Color // Importante: Agregar este import
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -64,7 +65,13 @@ fun OpenDocsReaderTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.background.toArgb()
+
+            // --- CORRECCIÓN ---
+            // Usamos Color.Transparent para que la barra de estado deje ver
+            // el color y la animación de la interfaz (TopBar/Surface) que hay debajo.
+            window.statusBarColor = Color.Transparent.toArgb()
+
+            // Esto controla si los iconos (hora/batería) son blancos o negros
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }
     }

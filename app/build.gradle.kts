@@ -84,6 +84,7 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.0.0")
 // Lifecycle y ViewModel
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")
+    implementation(libs.androidx.appcompat)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

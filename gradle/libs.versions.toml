@@ -12,6 +12,7 @@ navCompose = "2.8.5"
 androidPdfViewer = "3.2.0-beta.3"
 apachePoi = "5.2.5"
 xmlBeans = "5.2.0"
+appcompat = "1.7.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -37,6 +38,7 @@ android-pdf-viewer = { module = "com.github.mhiew:android-pdf-viewer", version.r
 apache-poi = { module = "org.apache.poi:poi", version.ref = "apachePoi" }
 apache-poi-ooxml = { module = "org.apache.poi:poi-ooxml", version.ref = "apachePoi" }
 apache-xmlbeans = { module = "org.apache.xmlbeans:xmlbeans", version.ref = "xmlBeans" }
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
