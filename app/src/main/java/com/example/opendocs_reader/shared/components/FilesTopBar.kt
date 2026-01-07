@@ -1,13 +1,16 @@
 package com.example.opendocs_reader.shared.components
 
-import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Diamond
-import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
@@ -19,64 +22,92 @@ import androidx.compose.ui.unit.sp
 fun FilesTopBar(
     title: String,
     isGrid: Boolean,
-    onBackClick: () -> Unit, // <--- Nuevo parámetro
+    // Nuevos parámetros para selección
+    selectionMode: Boolean,
+    selectedCount: Int,
+    onBackClick: () -> Unit,
+    onClearSelection: () -> Unit,
+    onSelectAll: () -> Unit,
+    onDelete: () -> Unit,
+    onShare: () -> Unit,
+    // Parámetros normales
     onToggleView: () -> Unit,
     onSortClick: () -> Unit,
     onSearchClick: () -> Unit,
     onPremiumClick: () -> Unit
 ) {
+    // Lógica para cambiar colores en modo selección
+    val containerColor = if (selectionMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+    val contentColor = if (selectionMode) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+
     TopAppBar(
         title = {
             Text(
-                text = title,
+                text = if (selectionMode) "$selectedCount seleccionados" else title,
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 20.sp
                 )
             )
         },
-        navigationIcon = { // <--- Botón de regresar
-            IconButton(onClick = onBackClick) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Regresar",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
+        navigationIcon = {
+            if (selectionMode) {
+                // Icono X para cancelar selección
+                IconButton(onClick = onClearSelection) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Cancelar",
+                        tint = contentColor
+                    )
+                }
+            } else {
+                // Icono Flecha para volver atrás
+                IconButton(onClick = onBackClick) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Regresar",
+                        tint = contentColor
+                    )
+                }
             }
         },
         actions = {
-            IconButton(onClick = onPremiumClick) {
-                Icon(
-                    imageVector = Icons.Default.Diamond,
-                    contentDescription = "Premium",
-                    tint = Color(0xFF00BCD4)
-                )
-            }
-            IconButton(onClick = onSearchClick) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = "Buscar",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            IconButton(onClick = onSortClick) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Sort,
-                    contentDescription = "Ordenar",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            IconButton(onClick = onToggleView) {
-                Icon(
-                    imageVector = if (isGrid) Icons.Default.FormatListBulleted else Icons.Default.Apps,
-                    contentDescription = "Cambiar Vista",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
+            if (selectionMode) {
+                // Acciones de Modo Selección
+                IconButton(onClick = onSelectAll) {
+                    Icon(Icons.Default.SelectAll, "Seleccionar todo", tint = contentColor)
+                }
+                IconButton(onClick = onShare) {
+                    Icon(Icons.Default.Share, "Compartir", tint = contentColor)
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.Delete, "Borrar", tint = contentColor)
+                }
+            } else {
+                // Acciones Normales
+                IconButton(onClick = onPremiumClick) {
+                    Icon(Icons.Default.Diamond, "Premium", tint = Color(0xFF00BCD4))
+                }
+                IconButton(onClick = onSearchClick) {
+                    Icon(Icons.Default.Search, "Buscar", tint = contentColor)
+                }
+                IconButton(onClick = onSortClick) {
+                    Icon(Icons.AutoMirrored.Filled.Sort, "Ordenar", tint = contentColor)
+                }
+                IconButton(onClick = onToggleView) {
+                    Icon(
+                        imageVector = if (isGrid) Icons.AutoMirrored.Filled.FormatListBulleted else Icons.Default.Apps,
+                        contentDescription = "Cambiar Vista",
+                        tint = contentColor
+                    )
+                }
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-            titleContentColor = MaterialTheme.colorScheme.onSurface
+            containerColor = containerColor,
+            titleContentColor = contentColor,
+            actionIconContentColor = contentColor,
+            navigationIconContentColor = contentColor
         )
     )
 }

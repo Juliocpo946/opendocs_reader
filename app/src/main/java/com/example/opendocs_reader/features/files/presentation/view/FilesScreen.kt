@@ -1,5 +1,6 @@
 package com.example.opendocs_reader.features.files.presentation.view
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -49,7 +50,6 @@ fun FilesScreen(
     )
 
     val categories = CategoryUtils.categories
-
     val initialIndex = categories.indexOfFirst { it.id.equals(initialCategory, ignoreCase = true) }.coerceAtLeast(0)
 
     val pagerState = rememberPagerState(initialPage = initialIndex, pageCount = { categories.size })
@@ -58,7 +58,15 @@ fun FilesScreen(
     val isGrid by viewModel.isGridMode.collectAsState()
     val files by viewModel.files.collectAsState()
 
-    // Sincronizar Pager con ViewModel
+    // Estados de Selección
+    val selectedIds by viewModel.selectedIds.collectAsState()
+    val selectionMode by viewModel.selectionMode.collectAsState()
+
+    // Manejar el botón "Atrás" del dispositivo
+    BackHandler(enabled = selectionMode) {
+        viewModel.clearSelection()
+    }
+
     LaunchedEffect(pagerState.currentPage) {
         viewModel.fetchFiles(categories[pagerState.currentPage].id)
     }
@@ -68,7 +76,13 @@ fun FilesScreen(
             FilesTopBar(
                 title = categories[pagerState.currentPage].name,
                 isGrid = isGrid,
+                selectionMode = selectionMode,
+                selectedCount = selectedIds.size,
                 onBackClick = { navController.popBackStack() },
+                onClearSelection = { viewModel.clearSelection() },
+                onSelectAll = { viewModel.selectAll() },
+                onDelete = { viewModel.deleteSelected() },
+                onShare = { /* Implementar compartir */ },
                 onToggleView = { viewModel.toggleViewMode() },
                 onSortClick = { },
                 onSearchClick = { },
@@ -96,9 +110,7 @@ fun FilesScreen(
                     Tab(
                         selected = pagerState.currentPage == index,
                         onClick = {
-                            scope.launch {
-                                pagerState.animateScrollToPage(index)
-                            }
+                            scope.launch { pagerState.animateScrollToPage(index) }
                         },
                         text = { Text(text = category.name) }
                     )
@@ -122,8 +134,16 @@ fun FilesScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            items(files) { file ->
-                                FileGridItem(file) { /* click action */ }
+                            // IMPORTANTE: 'key' soluciona el lag de scroll al evitar recomposiciones innecesarias
+                            items(items = files, key = { it.id }) { file ->
+                                FileGridItem(
+                                    file = file,
+                                    isSelected = selectedIds.contains(file.id),
+                                    selectionMode = selectionMode,
+                                    onClick = { /* Abrir archivo */ },
+                                    onLongClick = { viewModel.toggleSelection(file.id) },
+                                    onMenuAction = { action -> /* Manejar menú */ }
+                                )
                             }
                         }
                     } else {
@@ -132,8 +152,16 @@ fun FilesScreen(
                             verticalArrangement = Arrangement.Top,
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            items(files) { file ->
-                                FileListItem(file) { /* click action */ }
+                            // IMPORTANTE: 'key' soluciona el lag de scroll
+                            items(items = files, key = { it.id }) { file ->
+                                FileListItem(
+                                    file = file,
+                                    isSelected = selectedIds.contains(file.id),
+                                    selectionMode = selectionMode,
+                                    onClick = { /* Abrir archivo */ },
+                                    onLongClick = { viewModel.toggleSelection(file.id) },
+                                    onMenuAction = { action -> /* Manejar menú */ }
+                                )
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
                         }
