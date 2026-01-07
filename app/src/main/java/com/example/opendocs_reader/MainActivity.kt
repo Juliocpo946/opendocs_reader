@@ -4,16 +4,19 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -25,7 +28,11 @@ import com.example.opendocs_reader.core.utils.LocaleUtils
 import com.example.opendocs_reader.features.files.presentation.view.FilesScreen
 import com.example.opendocs_reader.features.menu.presentation.view.MenuScreen
 import com.example.opendocs_reader.features.splash.presentation.view.SplashScreen
-import com.example.opendocs_reader.shared.theme.OpenDocsReaderTheme
+import com.example.opendocs_reader.shared.theme.Opendocs_readerTheme
+
+val LocalAnimatedSurface = compositionLocalOf { Color.Unspecified }
+val LocalAnimatedOnSurface = compositionLocalOf { Color.Unspecified }
+val LocalAnimatedBackground = compositionLocalOf { Color.Unspecified }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,9 +45,6 @@ class MainActivity : ComponentActivity() {
             val themeMode by settingsRepository.themeMode.collectAsState(initial = "system")
             val language by settingsRepository.language.collectAsState(initial = "es")
 
-            // El LaunchedEffect vigila cambios en 'language'.
-            // Gracias a la corrección en LocaleUtils, si 'language' es el mismo,
-            // no habrá reinicio aunque esto se ejecute.
             LaunchedEffect(language) {
                 LocaleUtils.setLocale(this@MainActivity, language)
             }
@@ -51,15 +55,34 @@ class MainActivity : ComponentActivity() {
                 else -> isSystemInDarkTheme()
             }
 
-            OpenDocsReaderTheme(darkTheme = useDarkTheme) {
-                Crossfade(
-                    targetState = useDarkTheme,
-                    animationSpec = tween(500),
-                    label = "themeAnimation"
-                ) { _ ->
+            Opendocs_readerTheme(darkTheme = useDarkTheme, dynamicColor = false) {
+                // Anima los colores principales
+                val animatedSurface by animateColorAsState(
+                    targetValue = MaterialTheme.colorScheme.surface,
+                    animationSpec = tween(durationMillis = 600),
+                    label = "surface"
+                )
+
+                val animatedOnSurface by animateColorAsState(
+                    targetValue = MaterialTheme.colorScheme.onSurface,
+                    animationSpec = tween(durationMillis = 600),
+                    label = "onSurface"
+                )
+
+                val animatedBackground by animateColorAsState(
+                    targetValue = MaterialTheme.colorScheme.background,
+                    animationSpec = tween(durationMillis = 600),
+                    label = "background"
+                )
+
+                CompositionLocalProvider(
+                    LocalAnimatedSurface provides animatedSurface,
+                    LocalAnimatedOnSurface provides animatedOnSurface,
+                    LocalAnimatedBackground provides animatedBackground
+                ) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
-                        color = MaterialTheme.colorScheme.background
+                        color = animatedBackground
                     ) {
                         val mainNavController = rememberNavController()
 
