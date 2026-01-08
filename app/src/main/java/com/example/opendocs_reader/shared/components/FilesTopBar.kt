@@ -22,21 +22,18 @@ import androidx.compose.ui.unit.sp
 fun FilesTopBar(
     title: String,
     isGrid: Boolean,
-    // Nuevos parámetros para selección
     selectionMode: Boolean,
     selectedCount: Int,
-    onBackClick: () -> Unit,
+    onBackClick: (() -> Unit)? = null, // Cambio: ahora acepta null
     onClearSelection: () -> Unit,
     onSelectAll: () -> Unit,
     onDelete: () -> Unit,
     onShare: () -> Unit,
-    // Parámetros normales
     onToggleView: () -> Unit,
     onSortClick: () -> Unit,
     onSearchClick: () -> Unit,
     onPremiumClick: () -> Unit
 ) {
-    // Lógica para cambiar colores en modo selección
     val containerColor = if (selectionMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
     val contentColor = if (selectionMode) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
 
@@ -52,7 +49,6 @@ fun FilesTopBar(
         },
         navigationIcon = {
             if (selectionMode) {
-                // Icono X para cancelar selección
                 IconButton(onClick = onClearSelection) {
                     Icon(
                         imageVector = Icons.Default.Close,
@@ -60,8 +56,7 @@ fun FilesTopBar(
                         tint = contentColor
                     )
                 }
-            } else {
-                // Icono Flecha para volver atrás
+            } else if (onBackClick != null) { // Cambio: Solo se dibuja si NO es nulo
                 IconButton(onClick = onBackClick) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -73,7 +68,6 @@ fun FilesTopBar(
         },
         actions = {
             if (selectionMode) {
-                // Acciones de Modo Selección
                 IconButton(onClick = onSelectAll) {
                     Icon(Icons.Default.SelectAll, "Seleccionar todo", tint = contentColor)
                 }
@@ -84,7 +78,6 @@ fun FilesTopBar(
                     Icon(Icons.Default.Delete, "Borrar", tint = contentColor)
                 }
             } else {
-                // Acciones Normales
                 IconButton(onClick = onPremiumClick) {
                     Icon(Icons.Default.Diamond, "Premium", tint = Color(0xFF00BCD4))
                 }
