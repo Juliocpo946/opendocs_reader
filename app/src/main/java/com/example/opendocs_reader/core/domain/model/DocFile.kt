@@ -8,5 +8,6 @@ data class DocFile(
     val dateAdded: Long,
     val mimeType: String,
     val extension: String,
-    val lastAccessed: Long = 0
+    val lastAccessed: Long = 0,
+    val isFavorite: Boolean = false
 )

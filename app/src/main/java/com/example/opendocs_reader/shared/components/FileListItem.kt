@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,6 +32,7 @@ fun FileListItem(
     subtitleOverride: String? = null,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    onFavoriteClick: () -> Unit,
     onMenuAction: (String) -> Unit
 ) {
     val backgroundColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface
@@ -62,7 +65,16 @@ fun FileListItem(
                 color = Color.Gray
             )
         }
+
         if (!selectionMode) {
+            IconButton(onClick = onFavoriteClick) {
+                Icon(
+                    imageVector = if (file.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = "Favorito",
+                    tint = if (file.isFavorite) Color(0xFFFFC107) else Color.Gray
+                )
+            }
+
             Box {
                 IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, contentDescription = "Opciones") }
                 FileOptionsMenu(expanded = showMenu, onDismiss = { showMenu = false }, onAction = { showMenu = false; onMenuAction(it) })

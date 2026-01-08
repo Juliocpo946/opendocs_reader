@@ -7,4 +7,5 @@ interface DocRepository {
     fun getFilesByCategory(category: String): Flow<List<DocFile>>
     fun getRecentFiles(): Flow<List<DocFile>>
     suspend fun addToRecents(file: DocFile)
+    suspend fun toggleFavorite(file: DocFile)
 }

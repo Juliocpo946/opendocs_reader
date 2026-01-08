@@ -15,7 +15,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -34,7 +33,7 @@ import com.example.opendocs_reader.features.home.presentation.viewmodel.HomeView
 fun HomeScreen(rootNavController: NavController) {
     val context = LocalContext.current
 
-    // Inyección manual del repositorio correcto
+    // Inyección del repositorio
     val repository = remember { StatsRepositoryImpl(context) }
 
     val viewModel: HomeViewModel = viewModel(
@@ -42,18 +41,20 @@ fun HomeScreen(rootNavController: NavController) {
     )
 
     val uiState by viewModel.uiState.collectAsState()
-    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
+    // Launcher para permisos
     val storagePermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) {
-        viewModel.checkPermissions()
+        viewModel.refreshStats()
     }
 
+    // Refrescar estadísticas cada vez que la pantalla se vuelve visible (ON_RESUME)
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                viewModel.checkPermissions()
+                viewModel.refreshStats()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -73,6 +74,7 @@ fun HomeScreen(rootNavController: NavController) {
         )
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Grid de categorías (Asegúrate de que DocCategoryGrid use uiState.favoritesCount)
         DocCategoryGrid(
             stats = uiState,
             onCategoryClick = { category ->
@@ -91,6 +93,7 @@ fun HomeScreen(rootNavController: NavController) {
 
         StorageInfoBanner(stats = uiState)
 
+        // Botón de permisos si hace falta
         if (!hasStoragePermission()) {
             Spacer(modifier = Modifier.height(24.dp))
             Button(
@@ -100,7 +103,7 @@ fun HomeScreen(rootNavController: NavController) {
                         intent.data = Uri.parse("package:${context.packageName}")
                         storagePermissionLauncher.launch(intent)
                     } else {
-                        viewModel.checkPermissions()
+                        viewModel.refreshStats()
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),

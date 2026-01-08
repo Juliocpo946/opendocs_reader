@@ -134,7 +134,6 @@ fun FilesScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            // IMPORTANTE: 'key' soluciona el lag de scroll al evitar recomposiciones innecesarias
                             items(items = files, key = { it.id }) { file ->
                                 FileGridItem(
                                     file = file,
@@ -142,6 +141,7 @@ fun FilesScreen(
                                     selectionMode = selectionMode,
                                     onClick = { /* Abrir archivo */ },
                                     onLongClick = { viewModel.toggleSelection(file.id) },
+                                    onFavoriteClick = { viewModel.toggleFavorite(file) },
                                     onMenuAction = { action -> /* Manejar menú */ }
                                 )
                             }
@@ -152,7 +152,6 @@ fun FilesScreen(
                             verticalArrangement = Arrangement.Top,
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            // IMPORTANTE: 'key' soluciona el lag de scroll
                             items(items = files, key = { it.id }) { file ->
                                 FileListItem(
                                     file = file,
@@ -160,6 +159,7 @@ fun FilesScreen(
                                     selectionMode = selectionMode,
                                     onClick = { /* Abrir archivo */ },
                                     onLongClick = { viewModel.toggleSelection(file.id) },
+                                    onFavoriteClick = { viewModel.toggleFavorite(file) },
                                     onMenuAction = { action -> /* Manejar menú */ }
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))

@@ -28,6 +28,8 @@ class StatsRepositoryImpl(private val context: Context) : StatsRepository {
         val EXCEL_COUNT = intPreferencesKey("excel_count")
         val PPT_COUNT = intPreferencesKey("ppt_count")
         val TXT_COUNT = intPreferencesKey("txt_count")
+        // Agregamos la clave para favoritos
+        val FAVORITES_COUNT = intPreferencesKey("favorites_count")
     }
 
     override fun getCachedStats(): Flow<StorageStats> {
@@ -43,6 +45,7 @@ class StatsRepositoryImpl(private val context: Context) : StatsRepository {
                 excelCount = prefs[Keys.EXCEL_COUNT] ?: 0,
                 pptCount = prefs[Keys.PPT_COUNT] ?: 0,
                 txtCount = prefs[Keys.TXT_COUNT] ?: 0,
+                favoritesCount = prefs[Keys.FAVORITES_COUNT] ?: 0, // Leemos favoritos
                 isLoading = false
             )
         }
@@ -59,6 +62,7 @@ class StatsRepositoryImpl(private val context: Context) : StatsRepository {
                 prefs[Keys.EXCEL_COUNT] = scanResult.excelCount
                 prefs[Keys.PPT_COUNT] = scanResult.pptCount
                 prefs[Keys.TXT_COUNT] = scanResult.txtCount
+                prefs[Keys.FAVORITES_COUNT] = scanResult.favoritesCount // Guardamos favoritos
             }
         }
     }
@@ -67,7 +71,11 @@ class StatsRepositoryImpl(private val context: Context) : StatsRepository {
         var pdf = 0; var word = 0; var excel = 0; var ppt = 0; var txt = 0
         var docsSize = 0L
 
-        // Filtros SQL optimizados (Solo lo soportado)
+        // 1. Contar favoritos desde SharedPreferences
+        val favoritesPrefs = context.getSharedPreferences("opendocs_favorites", Context.MODE_PRIVATE)
+        val favoritesCount = favoritesPrefs.getStringSet("ids", emptySet())?.size ?: 0
+
+        // Filtros SQL optimizados
         val selection = "(" +
                 "${MediaStore.Files.FileColumns.MIME_TYPE} LIKE '%pdf%' OR " +
                 "${MediaStore.Files.FileColumns.MIME_TYPE} LIKE '%word%' OR " +
@@ -121,7 +129,12 @@ class StatsRepositoryImpl(private val context: Context) : StatsRepository {
             docsUsedBytes = docsSize,
             deviceTotalBytes = deviceTotal,
             deviceFreeBytes = deviceFree,
-            pdfCount = pdf, wordCount = word, excelCount = excel, pptCount = ppt, txtCount = txt,
+            pdfCount = pdf,
+            wordCount = word,
+            excelCount = excel,
+            pptCount = ppt,
+            txtCount = txt,
+            favoritesCount = favoritesCount, // Asignamos el conteo
             isLoading = false
         )
     }

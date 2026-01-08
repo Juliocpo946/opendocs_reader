@@ -62,6 +62,7 @@ fun RecentScreen(
                                 selectionMode = selectionMode,
                                 onClick = { viewModel.openFile(file) },
                                 onLongClick = { viewModel.toggleSelection(file.id) },
+                                onFavoriteClick = { viewModel.toggleFavorite(file) }, // Agregado
                                 onMenuAction = { }
                             )
                         }
@@ -79,6 +80,7 @@ fun RecentScreen(
                                 subtitleOverride = "Visto: ${FileUtils.formatDate(file.lastAccessed)}",
                                 onClick = { viewModel.openFile(file) },
                                 onLongClick = { viewModel.toggleSelection(file.id) },
+                                onFavoriteClick = { viewModel.toggleFavorite(file) }, // Agregado
                                 onMenuAction = { }
                             )
                             Spacer(modifier = Modifier.height(8.dp))

@@ -21,9 +21,10 @@ class HomeViewModel(private val repository: StatsRepository) : ViewModel() {
                 _uiState.value = stats
             }
         }
+        refreshStats()
     }
 
-    fun checkPermissions() {
+    fun refreshStats() {
         viewModelScope.launch {
             repository.scanAndRefreshStats()
         }
