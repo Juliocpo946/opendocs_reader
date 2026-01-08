@@ -1,59 +1,60 @@
 package com.example.opendocs_reader.features.settings.presentation.viewmodel
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
-import com.example.opendocs_reader.core.domain.repository.SettingsRepository
-import kotlinx.coroutines.flow.SharingStarted
+import android.app.Application
+import android.content.Context
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
+import androidx.lifecycle.AndroidViewModel
+import com.example.opendocs_reader.features.settings.domain.model.AppLanguage
+import com.example.opendocs_reader.features.settings.domain.model.AppTheme
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.asStateFlow
 
-data class SettingsUiState(
-    val themeMode: String = "system", // system, light, dark
-    val keepScreenOn: Boolean = false,
-    val language: String = "es",
-    val appVersion: String = "1.0.0"
-)
+class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
-class SettingsViewModel(private val repository: SettingsRepository) : ViewModel() {
+    private val prefs = application.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
 
-    val uiState: StateFlow<SettingsUiState> = combine(
-        repository.themeMode,
-        repository.keepScreenOn,
-        repository.language
-    ) { theme, screenOn, lang ->
-        SettingsUiState(
-            themeMode = theme,
-            keepScreenOn = screenOn,
-            language = lang
-        )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = SettingsUiState()
-    )
+    private val _currentTheme = MutableStateFlow(AppTheme.SYSTEM)
+    val currentTheme: StateFlow<AppTheme> = _currentTheme.asStateFlow()
 
-    fun setThemeMode(mode: String) {
-        viewModelScope.launch { repository.setThemeMode(mode) }
+    private val _currentLanguage = MutableStateFlow(AppLanguage.SYSTEM)
+    val currentLanguage: StateFlow<AppLanguage> = _currentLanguage.asStateFlow()
+
+    init {
+        loadSettings()
     }
 
-    fun toggleKeepScreenOn(enabled: Boolean) {
-        viewModelScope.launch { repository.setKeepScreenOn(enabled) }
+    private fun loadSettings() {
+        val themeName = prefs.getString("theme", AppTheme.SYSTEM.name) ?: AppTheme.SYSTEM.name
+        _currentTheme.value = try { AppTheme.valueOf(themeName) } catch (e: Exception) { AppTheme.SYSTEM }
+
+        val langCode = prefs.getString("language", AppLanguage.SYSTEM.code) ?: AppLanguage.SYSTEM.code
+        // CAMBIO: values() -> entries
+        _currentLanguage.value = AppLanguage.entries.find { it.code == langCode } ?: AppLanguage.SYSTEM
     }
 
-    fun setLanguage(languageCode: String) {
-        viewModelScope.launch { repository.setLanguage(languageCode) }
-    }
-}
+    fun setTheme(theme: AppTheme) {
+        _currentTheme.value = theme
+        prefs.edit().putString("theme", theme.name).apply()
 
-class SettingsViewModelFactory(private val repository: SettingsRepository) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(SettingsViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return SettingsViewModel(repository) as T
+        val mode = when (theme) {
+            AppTheme.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+            AppTheme.DARK -> AppCompatDelegate.MODE_NIGHT_YES
+            AppTheme.SYSTEM -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
         }
-        throw IllegalArgumentException("Unknown ViewModel class")
+        AppCompatDelegate.setDefaultNightMode(mode)
+    }
+
+    fun setLanguage(language: AppLanguage) {
+        _currentLanguage.value = language
+        prefs.edit().putString("language", language.code).apply()
+
+        val localeList = if (language == AppLanguage.SYSTEM) {
+            LocaleListCompat.getEmptyLocaleList()
+        } else {
+            LocaleListCompat.forLanguageTags(language.code)
+        }
+        AppCompatDelegate.setApplicationLocales(localeList)
     }
 }

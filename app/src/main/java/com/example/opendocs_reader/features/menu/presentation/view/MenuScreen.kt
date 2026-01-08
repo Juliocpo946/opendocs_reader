@@ -1,9 +1,11 @@
 package com.example.opendocs_reader.features.menu.presentation.view
 
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -20,11 +22,15 @@ import com.example.opendocs_reader.features.home.presentation.view.HomeScreen
 import com.example.opendocs_reader.features.recent.presentation.view.RecentScreen
 import com.example.opendocs_reader.features.recent.presentation.viewmodel.RecentViewModel
 import com.example.opendocs_reader.features.settings.presentation.view.SettingsScreen
+import com.example.opendocs_reader.features.settings.presentation.viewmodel.SettingsViewModel
 import com.example.opendocs_reader.shared.components.OpenDocsBottomBar
 import com.example.opendocs_reader.shared.components.OpenDocsTopBar
 
 @Composable
-fun MenuScreen(rootNavController: NavController) {
+fun MenuScreen(
+    rootNavController: NavController,
+    settingsViewModel: SettingsViewModel
+) {
     val menuNavController = rememberNavController()
     val navBackStackEntry by menuNavController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -40,12 +46,13 @@ fun MenuScreen(rootNavController: NavController) {
     )
 
     Scaffold(
+        // IMPORTANTE: Transparente para respetar la animación del Surface padre
+        containerColor = Color.Transparent,
         topBar = {
-            // Solo mostramos TopBar aquí para Configuración
             if (currentRoute == Screen.Settings.route) {
                 OpenDocsTopBar(
                     title = "Configuración",
-                    showActions = false // IMPORTANTE: Oculta Buscar y Diamante
+                    showActions = false
                 )
             }
         },
@@ -53,7 +60,6 @@ fun MenuScreen(rootNavController: NavController) {
             OpenDocsBottomBar(navController = menuNavController)
         }
     ) { paddingValues ->
-
         val topPadding = if (currentRoute == Screen.Settings.route) paddingValues.calculateTopPadding() else 0.dp
 
         NavHost(
@@ -70,7 +76,7 @@ fun MenuScreen(rootNavController: NavController) {
                 )
             }
             composable(route = Screen.Settings.route) {
-                SettingsScreen()
+                SettingsScreen(viewModel = settingsViewModel)
             }
         }
     }

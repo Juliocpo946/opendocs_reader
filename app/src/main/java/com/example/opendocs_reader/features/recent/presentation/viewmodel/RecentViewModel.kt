@@ -19,7 +19,7 @@ class RecentViewModel(private val repository: DocRepository) : ViewModel() {
     private val _isLoading = MutableStateFlow(true)
     private val _searchQuery = MutableStateFlow("")
     private val _isSearchActive = MutableStateFlow(false)
-    private val _sortOption = MutableStateFlow(SortOption.DEFAULT) // Default: Orden de historial
+    private val _sortOption = MutableStateFlow(SortOption.DEFAULT)
 
     val uiState: StateFlow<RecentUiState> = combine(_allFiles, _isLoading, _searchQuery, _sortOption) { files, loading, query, sort ->
         val filtered = if (query.isBlank()) files else files.filter { it.name.contains(query, ignoreCase = true) }
@@ -70,13 +70,35 @@ class RecentViewModel(private val repository: DocRepository) : ViewModel() {
     fun onSearchClose() {
         _isSearchActive.value = false
         _searchQuery.value = ""
+        clearSelection()
     }
 
     fun toggleFavorite(file: DocFile) {
         viewModelScope.launch {
             repository.toggleFavorite(file)
-            _allFiles.update { currentFiles ->
-                currentFiles.map { if (it.id == file.id) it.copy(isFavorite = !it.isFavorite) else it }
+            refresh()
+        }
+    }
+
+    // Acciones de Archivo
+    fun renameFile(file: DocFile, newName: String) {
+        viewModelScope.launch {
+            if (repository.renameFile(file, newName)) refresh()
+        }
+    }
+
+    fun deleteFile(file: DocFile) {
+        viewModelScope.launch {
+            if (repository.deleteFiles(listOf(file))) refresh()
+        }
+    }
+
+    fun deleteSelected() {
+        val selected = _allFiles.value.filter { _selectedIds.value.contains(it.id) }
+        viewModelScope.launch {
+            if (repository.deleteFiles(selected)) {
+                clearSelection()
+                refresh()
             }
         }
     }
@@ -87,6 +109,8 @@ class RecentViewModel(private val repository: DocRepository) : ViewModel() {
     }
     fun selectAll() { _selectedIds.value = _allFiles.value.map { it.id }.toSet() }
     fun clearSelection() { _selectedIds.value = emptySet() }
-    fun deleteSelected() { clearSelection() }
+
+    fun getSelectedFiles(): List<DocFile> = _allFiles.value.filter { _selectedIds.value.contains(it.id) }
+
     fun openFile(file: DocFile) { viewModelScope.launch { repository.addToRecents(file); refresh() } }
 }

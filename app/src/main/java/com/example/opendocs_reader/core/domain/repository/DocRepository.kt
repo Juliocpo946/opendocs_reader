@@ -8,7 +8,7 @@ interface DocRepository {
     fun getRecentFiles(): Flow<List<DocFile>>
     suspend fun addToRecents(file: DocFile)
     suspend fun toggleFavorite(file: DocFile)
-
-    // Nueva función para búsqueda global
     suspend fun searchFiles(query: String): List<DocFile>
+    suspend fun renameFile(file: DocFile, newName: String): Boolean
+    suspend fun deleteFiles(files: List<DocFile>): Boolean
 }

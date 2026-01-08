@@ -1,6 +1,9 @@
 package com.example.opendocs_reader.core.data.repository
 
+import android.content.ContentUris
+import android.content.ContentValues
 import android.content.Context
+import android.media.MediaScannerConnection
 import android.provider.MediaStore
 import androidx.core.content.edit
 import com.example.opendocs_reader.core.domain.model.DocFile
@@ -23,15 +26,11 @@ class DocRepositoryImpl(
     private val memoryCache = ConcurrentHashMap<String, List<DocFile>>()
 
     override fun getFilesByCategory(category: String): Flow<List<DocFile>> = flow {
-        if (category == "Favoritos") {
-            memoryCache.remove(category)
-        }
+        if (category == "Favoritos") memoryCache.remove(category)
 
-        memoryCache[category]?.let { cachedFiles ->
-            if (cachedFiles.isNotEmpty()) emit(cachedFiles)
-        }
+        memoryCache[category]?.let { if (it.isNotEmpty()) emit(it) }
 
-        val freshFiles = queryMediaStore(category = category, query = null)
+        val freshFiles = queryMediaStore(category, null)
         memoryCache[category] = freshFiles
         emit(freshFiles)
     }.flowOn(Dispatchers.IO)
@@ -42,17 +41,14 @@ class DocRepositoryImpl(
             emit(emptyList())
             return@flow
         }
-
         val historyItems = historyStr.split("|").filter { it.isNotEmpty() }
         val recentFiles = mutableListOf<DocFile>()
         val favoriteIds = getFavoriteIds()
 
-        // Optimización: Consultar solo los IDs necesarios
         val idsToQuery = historyItems.mapNotNull { it.substringBefore(":").toLongOrNull() }.distinct()
-
         if (idsToQuery.isNotEmpty()) {
             val selection = "${MediaStore.Files.FileColumns._ID} IN (${idsToQuery.joinToString(",")})"
-            val filesMap = queryMediaStoreCustom(selection, null).associateBy { it.id }
+            val filesMap = queryMediaStoreCustom(selection, null, favoriteIds).associateBy { it.id }
 
             historyItems.forEach { item ->
                 val parts = item.split(":")
@@ -60,7 +56,7 @@ class DocRepositoryImpl(
                     val id = parts[0].toLongOrNull()
                     val timestamp = parts[1].toLongOrNull() ?: 0L
                     filesMap[id]?.let { file ->
-                        recentFiles.add(file.copy(lastAccessed = timestamp, isFavorite = favoriteIds.contains(file.id)))
+                        recentFiles.add(file.copy(lastAccessed = timestamp))
                     }
                 }
             }
@@ -68,10 +64,9 @@ class DocRepositoryImpl(
         emit(recentFiles)
     }.flowOn(Dispatchers.IO)
 
-    // Búsqueda Global para Home
     override suspend fun searchFiles(query: String): List<DocFile> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
-        return@withContext queryMediaStore(category = "Todos", query = query)
+        return@withContext queryMediaStore("Todos", query)
     }
 
     override suspend fun addToRecents(file: DocFile) {
@@ -88,23 +83,61 @@ class DocRepositoryImpl(
         val idStr = file.id.toString()
         val currentFavorites = favoritesPrefs.getStringSet("ids", emptySet()) ?: emptySet()
         val newFavorites = currentFavorites.toMutableSet()
-
         if (newFavorites.contains(idStr)) newFavorites.remove(idStr) else newFavorites.add(idStr)
         favoritesPrefs.edit { putStringSet("ids", newFavorites) }
         memoryCache.clear()
+    }
+
+    override suspend fun renameFile(file: DocFile, newName: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val contentUri = ContentUris.withAppendedId(MediaStore.Files.getContentUri("external"), file.id)
+            val values = ContentValues().apply {
+                put(MediaStore.Files.FileColumns.DISPLAY_NAME, newName)
+            }
+            val rows = context.contentResolver.update(contentUri, values, null, null)
+            if (rows > 0) {
+                // Actualizar archivo físico si es necesario
+                val oldFile = File(file.path)
+                val newFile = File(oldFile.parent, newName)
+                if (oldFile.exists()) oldFile.renameTo(newFile)
+                memoryCache.clear()
+                return@withContext true
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return@withContext false
+    }
+
+    override suspend fun deleteFiles(files: List<DocFile>): Boolean = withContext(Dispatchers.IO) {
+        var success = true
+        files.forEach { file ->
+            try {
+                val contentUri = ContentUris.withAppendedId(MediaStore.Files.getContentUri("external"), file.id)
+                val rows = context.contentResolver.delete(contentUri, null, null)
+                if (rows > 0) {
+                    val physicalFile = File(file.path)
+                    if (physicalFile.exists()) physicalFile.delete()
+                } else {
+                    success = false
+                }
+            } catch (e: Exception) {
+                success = false
+            }
+        }
+        if (success) memoryCache.clear()
+        return@withContext success
     }
 
     private fun getFavoriteIds(): Set<Long> {
         return favoritesPrefs.getStringSet("ids", emptySet())?.mapNotNull { it.toLongOrNull() }?.toSet() ?: emptySet()
     }
 
-    // Método unificado de consulta
     private fun queryMediaStore(category: String, query: String?): List<DocFile> {
         val favoriteIds = getFavoriteIds()
         val selectionBuilder = StringBuilder()
         val selectionArgs = mutableListOf<String>()
 
-        // Filtro por Categoría
         if (category == "Favoritos") {
             if (favoriteIds.isEmpty()) return emptyList()
             selectionBuilder.append("${MediaStore.Files.FileColumns._ID} IN (${favoriteIds.joinToString(",")})")
@@ -120,7 +153,6 @@ class DocRepositoryImpl(
             }
         }
 
-        // Filtro por Búsqueda (Query)
         if (!query.isNullOrBlank()) {
             if (selectionBuilder.isNotEmpty()) selectionBuilder.append(" AND ")
             selectionBuilder.append("${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE ?")
@@ -130,7 +162,7 @@ class DocRepositoryImpl(
         return queryMediaStoreCustom(selectionBuilder.toString(), selectionArgs.toTypedArray(), favoriteIds)
     }
 
-    private fun queryMediaStoreCustom(selection: String, args: Array<String>?, favoriteIds: Set<Long> = emptySet()): List<DocFile> {
+    private fun queryMediaStoreCustom(selection: String, args: Array<String>?, favoriteIds: Set<Long>): List<DocFile> {
         val files = mutableListOf<DocFile>()
         val projection = arrayOf(
             MediaStore.Files.FileColumns._ID,
@@ -145,10 +177,7 @@ class DocRepositoryImpl(
         try {
             context.contentResolver.query(
                 MediaStore.Files.getContentUri("external"),
-                projection,
-                selection,
-                args,
-                sortOrder
+                projection, selection, args, sortOrder
             )?.use { cursor ->
                 val idCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
                 val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME)
@@ -164,7 +193,6 @@ class DocRepositoryImpl(
                         val id = cursor.getLong(idCol)
                         val extension = name.substringAfterLast('.', "")
 
-                        // Solo agregamos si es una extensión válida o soportada
                         if (CategoryUtils.getCategoryForExtension(extension) != "Otro" || favoriteIds.contains(id)) {
                             files.add(
                                 DocFile(

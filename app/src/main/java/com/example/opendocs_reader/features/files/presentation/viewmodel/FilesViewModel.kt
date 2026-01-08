@@ -13,10 +13,8 @@ class FilesViewModel(private val repository: DocRepository) : ViewModel() {
     private val _allFiles = MutableStateFlow<List<DocFile>>(emptyList())
     private val _searchQuery = MutableStateFlow("")
     private val _isSearchActive = MutableStateFlow(false)
-    // Por defecto ordenamos por fecha (lo más nuevo primero) para ayudar a encontrar cosas rápido
     private val _sortOption = MutableStateFlow(SortOption.DATE_NEWEST)
 
-    // Pipeline: 1. Filtrar (Búsqueda) -> 2. Ordenar
     val files: StateFlow<List<DocFile>> = combine(_allFiles, _searchQuery, _sortOption) { files, query, sort ->
         val filtered = if (query.isBlank()) files else files.filter { it.name.contains(query, ignoreCase = true) }
         sortFiles(filtered, sort)
@@ -39,8 +37,12 @@ class FilesViewModel(private val repository: DocRepository) : ViewModel() {
 
     fun fetchFiles(category: String) {
         currentCategory = category
+        refresh()
+    }
+
+    fun refresh() {
         viewModelScope.launch {
-            repository.getFilesByCategory(category).collect {
+            repository.getFilesByCategory(currentCategory).collect {
                 _allFiles.value = it
             }
         }
@@ -59,7 +61,6 @@ class FilesViewModel(private val repository: DocRepository) : ViewModel() {
 
     fun onSortChange(option: SortOption) { _sortOption.value = option }
 
-    // Lógica Búsqueda
     fun onSearchTrigger() { _isSearchActive.value = true }
     fun onSearchQueryChange(query: String) { _searchQuery.value = query }
     fun onSearchClose() {
@@ -67,17 +68,33 @@ class FilesViewModel(private val repository: DocRepository) : ViewModel() {
         _searchQuery.value = ""
     }
 
-    // Lógica Favoritos
     fun toggleFavorite(file: DocFile) {
         viewModelScope.launch {
             repository.toggleFavorite(file)
-            if (currentCategory == "Favoritos") {
-                _allFiles.update { list -> list.filter { it.id != file.id } }
-            } else {
-                _allFiles.update { list ->
-                    list.map { if (it.id == file.id) it.copy(isFavorite = !it.isFavorite) else it }
-                }
-            }
+            refresh()
+        }
+    }
+
+    fun renameFile(file: DocFile, newName: String) {
+        viewModelScope.launch {
+            repository.renameFile(file, newName)
+            refresh()
+        }
+    }
+
+    fun deleteFile(file: DocFile) {
+        viewModelScope.launch {
+            repository.deleteFiles(listOf(file))
+            refresh()
+        }
+    }
+
+    fun deleteSelected() {
+        val selected = _allFiles.value.filter { _selectedIds.value.contains(it.id) }
+        viewModelScope.launch {
+            repository.deleteFiles(selected)
+            clearSelection()
+            refresh()
         }
     }
 
@@ -87,5 +104,7 @@ class FilesViewModel(private val repository: DocRepository) : ViewModel() {
     }
     fun selectAll() { _selectedIds.value = files.value.map { it.id }.toSet() }
     fun clearSelection() { _selectedIds.value = emptySet() }
-    fun deleteSelected() { clearSelection() }
+
+    // Helper para compartir múltiple
+    fun getSelectedFiles(): List<DocFile> = _allFiles.value.filter { _selectedIds.value.contains(it.id) }
 }

@@ -1,5 +1,7 @@
 package com.example.opendocs_reader.features.files.presentation.view
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
@@ -20,19 +22,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ShareCompat
+import androidx.core.content.FileProvider
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.example.opendocs_reader.R
 import com.example.opendocs_reader.core.data.repository.DocRepositoryImpl
+import com.example.opendocs_reader.core.domain.model.DocFile
 import com.example.opendocs_reader.core.utils.CategoryUtils
-import com.example.opendocs_reader.shared.components.FileGridItem
-import com.example.opendocs_reader.shared.components.FileListItem
+import com.example.opendocs_reader.shared.components.*
 import com.example.opendocs_reader.features.files.presentation.viewmodel.FilesViewModel
-import com.example.opendocs_reader.shared.components.FilesTopBar
-import com.example.opendocs_reader.shared.components.SortBottomSheet
 import com.example.opendocs_reader.shared.theme.*
 import kotlinx.coroutines.launch
+import java.io.File
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -42,7 +49,6 @@ fun FilesScreen(
 ) {
     val context = LocalContext.current
     val repository = remember { DocRepositoryImpl(context) }
-
     val viewModel: FilesViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -62,11 +68,17 @@ fun FilesScreen(
     val isSearchActive by viewModel.isSearchActive.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val sortOption by viewModel.sortOption.collectAsState()
-
     val selectedIds by viewModel.selectedIds.collectAsState()
     val selectionMode by viewModel.selectionMode.collectAsState()
 
     var showSortSheet by remember { mutableStateOf(false) }
+    var selectedFileForOptions by remember { mutableStateOf<DocFile?>(null) }
+    var activeActionFile by remember { mutableStateOf<DocFile?>(null) }
+
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var showPropertiesDialog by remember { mutableStateOf(false) }
+    var showBatchDeleteDialog by remember { mutableStateOf(false) }
 
     BackHandler(enabled = isSearchActive || selectionMode) {
         if (selectionMode) viewModel.clearSelection() else viewModel.onSearchClose()
@@ -79,11 +91,50 @@ fun FilesScreen(
     if (showSortSheet) {
         SortBottomSheet(
             currentSort = sortOption,
-            onSortSelected = {
-                viewModel.onSortChange(it)
-                showSortSheet = false
-            },
+            onSortSelected = { viewModel.onSortChange(it); showSortSheet = false },
             onDismiss = { showSortSheet = false }
+        )
+    }
+
+    if (selectedFileForOptions != null) {
+        val file = selectedFileForOptions!!
+        FileOptionsSheet(
+            file = file,
+            onDismiss = { selectedFileForOptions = null },
+            onFavorite = { viewModel.toggleFavorite(file); selectedFileForOptions = null },
+            onShare = { shareFile(context, file); selectedFileForOptions = null },
+            onRename = { activeActionFile = file; showRenameDialog = true; selectedFileForOptions = null },
+            onDelete = { activeActionFile = file; showDeleteDialog = true; selectedFileForOptions = null },
+            onProperties = { activeActionFile = file; showPropertiesDialog = true; selectedFileForOptions = null },
+            onShortcut = { createShortcut(context, file); selectedFileForOptions = null }
+        )
+    }
+
+    if (showRenameDialog && activeActionFile != null) {
+        RenameFileDialog(
+            currentName = activeActionFile!!.name,
+            onDismiss = { showRenameDialog = false; activeActionFile = null },
+            onConfirm = { newName -> viewModel.renameFile(activeActionFile!!, newName); showRenameDialog = false; activeActionFile = null }
+        )
+    }
+
+    if (showDeleteDialog && activeActionFile != null) {
+        DeleteConfirmationDialog(
+            count = 1,
+            onDismiss = { showDeleteDialog = false; activeActionFile = null },
+            onConfirm = { viewModel.deleteFile(activeActionFile!!); showDeleteDialog = false; activeActionFile = null }
+        )
+    }
+
+    if (showPropertiesDialog && activeActionFile != null) {
+        FilePropertiesDialog(file = activeActionFile!!, onDismiss = { showPropertiesDialog = false; activeActionFile = null })
+    }
+
+    if (showBatchDeleteDialog) {
+        DeleteConfirmationDialog(
+            count = selectedIds.size,
+            onDismiss = { showBatchDeleteDialog = false },
+            onConfirm = { viewModel.deleteSelected(); showBatchDeleteDialog = false }
         )
     }
 
@@ -99,8 +150,8 @@ fun FilesScreen(
                 onBackClick = { navController.popBackStack() },
                 onClearSelection = { viewModel.clearSelection() },
                 onSelectAll = { viewModel.selectAll() },
-                onDelete = { viewModel.deleteSelected() },
-                onShare = { },
+                onDelete = { showBatchDeleteDialog = true },
+                onShare = { shareFiles(context, viewModel.getSelectedFiles()) },
                 onToggleView = { viewModel.toggleViewMode() },
                 onSearchTrigger = { viewModel.onSearchTrigger() },
                 onSearchQueryChange = { viewModel.onSearchQueryChange(it) },
@@ -110,7 +161,6 @@ fun FilesScreen(
             )
         }
     ) { paddingValues ->
-
         Column(modifier = Modifier.padding(paddingValues)) {
             if (!isSearchActive) {
                 ScrollableTabRow(
@@ -120,10 +170,7 @@ fun FilesScreen(
                     contentColor = PrimaryLight,
                     indicator = { tabPositions ->
                         if (pagerState.currentPage < tabPositions.size) {
-                            TabRowDefaults.SecondaryIndicator(
-                                Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
-                                color = PrimaryLight
-                            )
+                            TabRowDefaults.SecondaryIndicator(Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]), color = PrimaryLight)
                         }
                     }
                 ) {
@@ -142,11 +189,9 @@ fun FilesScreen(
                 modifier = Modifier.fillMaxSize(),
                 userScrollEnabled = !isSearchActive
             ) {
-                // CORRECCIÓN DE SCROLL: Creamos el estado para la lista y el grid
                 val listState = rememberLazyListState()
                 val gridState = rememberLazyGridState()
 
-                // "¡Oye! Si cambia el orden o la búsqueda, vete al inicio"
                 LaunchedEffect(sortOption, searchQuery) {
                     listState.scrollToItem(0)
                     gridState.scrollToItem(0)
@@ -159,7 +204,7 @@ fun FilesScreen(
                 } else {
                     if (isGrid) {
                         LazyVerticalGrid(
-                            state = gridState, // Asignamos el estado
+                            state = gridState,
                             columns = GridCells.Fixed(3),
                             contentPadding = PaddingValues(16.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -174,13 +219,14 @@ fun FilesScreen(
                                     onClick = { /* Abrir */ },
                                     onLongClick = { viewModel.toggleSelection(file.id) },
                                     onFavoriteClick = { viewModel.toggleFavorite(file) },
-                                    onMenuAction = { }
+                                    // Cambio: Ahora usamos onMenuClick
+                                    onMenuClick = { selectedFileForOptions = file }
                                 )
                             }
                         }
                     } else {
                         LazyColumn(
-                            state = listState, // Asignamos el estado
+                            state = listState,
                             contentPadding = PaddingValues(16.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
@@ -192,7 +238,8 @@ fun FilesScreen(
                                     onClick = { /* Abrir */ },
                                     onLongClick = { viewModel.toggleSelection(file.id) },
                                     onFavoriteClick = { viewModel.toggleFavorite(file) },
-                                    onMenuAction = { }
+                                    // Cambio: Ahora usamos onMenuClick
+                                    onMenuClick = { selectedFileForOptions = file }
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
@@ -201,5 +248,45 @@ fun FilesScreen(
                 }
             }
         }
+    }
+}
+
+private fun shareFile(context: android.content.Context, file: DocFile) {
+    try {
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", File(file.path))
+        val intent = ShareCompat.IntentBuilder(context)
+            .setType(file.mimeType)
+            .setStream(uri)
+            .createChooserIntent()
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        context.startActivity(intent)
+    } catch (e: Exception) { e.printStackTrace() }
+}
+
+private fun shareFiles(context: android.content.Context, files: List<DocFile>) {
+    if (files.isEmpty()) return
+    try {
+        val uris = ArrayList<Uri>()
+        files.forEach { file -> uris.add(FileProvider.getUriForFile(context, "${context.packageName}.provider", File(file.path))) }
+        val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = "*/*"
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, "Compartir archivos"))
+    } catch (e: Exception) { e.printStackTrace() }
+}
+
+private fun createShortcut(context: android.content.Context, file: DocFile) {
+    if (ShortcutManagerCompat.isRequestPinShortcutSupported(context)) {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(FileProvider.getUriForFile(context, "${context.packageName}.provider", File(file.path)), file.mimeType)
+            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+        }
+        val shortcutInfo = ShortcutInfoCompat.Builder(context, file.id.toString())
+            .setShortLabel(file.name).setLongLabel(file.name)
+            .setIcon(IconCompat.createWithResource(context, R.mipmap.ic_launcher))
+            .setIntent(intent).build()
+        ShortcutManagerCompat.requestPinShortcut(context, shortcutInfo, null)
     }
 }

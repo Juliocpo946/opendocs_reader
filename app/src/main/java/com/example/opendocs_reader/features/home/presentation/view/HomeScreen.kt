@@ -22,21 +22,27 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ShareCompat
+import androidx.core.content.FileProvider
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.example.opendocs_reader.R
 import com.example.opendocs_reader.core.data.repository.DocRepositoryImpl
 import com.example.opendocs_reader.core.data.repository.StatsRepositoryImpl
+import com.example.opendocs_reader.core.domain.model.DocFile
 import com.example.opendocs_reader.core.navigation.Screen
 import com.example.opendocs_reader.features.home.presentation.components.DocCategoryGrid
 import com.example.opendocs_reader.features.home.presentation.components.StorageInfoBanner
 import com.example.opendocs_reader.features.home.presentation.viewmodel.HomeViewModel
 import com.example.opendocs_reader.features.home.presentation.viewmodel.HomeViewModelFactory
-import com.example.opendocs_reader.shared.components.FileListItem
-import com.example.opendocs_reader.shared.components.OpenDocsTopBar
-import com.example.opendocs_reader.shared.components.SortBottomSheet
+import com.example.opendocs_reader.shared.components.*
+import java.io.File
 
 @Composable
 fun HomeScreen(rootNavController: NavController) {
@@ -53,11 +59,20 @@ fun HomeScreen(rootNavController: NavController) {
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
     val sortOption by viewModel.sortOption.collectAsState()
+    val selectedIds by viewModel.selectedIds.collectAsState()
+    val selectionMode by viewModel.selectionMode.collectAsState()
 
     val lifecycleOwner = LocalLifecycleOwner.current
     var showSortSheet by remember { mutableStateOf(false) }
 
-    // CORRECCIÓN DE SCROLL para resultados de búsqueda
+    // Estados para Menús y Diálogos
+    var selectedFileForOptions by remember { mutableStateOf<DocFile?>(null) }
+    var activeActionFile by remember { mutableStateOf<DocFile?>(null) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var showPropertiesDialog by remember { mutableStateOf(false) }
+    var showBatchDeleteDialog by remember { mutableStateOf(false) }
+
     val searchListState = rememberLazyListState()
 
     val storagePermissionLauncher = rememberLauncherForActivityResult(
@@ -72,17 +87,15 @@ fun HomeScreen(rootNavController: NavController) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    BackHandler(enabled = isSearchActive) {
-        viewModel.onSearchClose()
+    BackHandler(enabled = isSearchActive || selectionMode) {
+        if (selectionMode) viewModel.clearSelection() else viewModel.onSearchClose()
     }
 
-    // Resetear scroll si cambia el orden mientras se busca
     LaunchedEffect(sortOption, searchQuery) {
-        if (isSearchActive) {
-            searchListState.scrollToItem(0)
-        }
+        if (isSearchActive) searchListState.scrollToItem(0)
     }
 
+    // --- Bottom Sheets y Diálogos ---
     if (showSortSheet) {
         SortBottomSheet(
             currentSort = sortOption,
@@ -91,7 +104,53 @@ fun HomeScreen(rootNavController: NavController) {
         )
     }
 
+    if (selectedFileForOptions != null) {
+        val file = selectedFileForOptions!!
+        FileOptionsSheet(
+            file = file,
+            onDismiss = { selectedFileForOptions = null },
+            onFavorite = { viewModel.toggleFavorite(file); selectedFileForOptions = null },
+            onShare = { shareFileHome(context, file); selectedFileForOptions = null },
+            onRename = { activeActionFile = file; showRenameDialog = true; selectedFileForOptions = null },
+            onDelete = { activeActionFile = file; showDeleteDialog = true; selectedFileForOptions = null },
+            onProperties = { activeActionFile = file; showPropertiesDialog = true; selectedFileForOptions = null },
+            onShortcut = { createShortcutHome(context, file); selectedFileForOptions = null }
+        )
+    }
+
+    if (showRenameDialog && activeActionFile != null) {
+        RenameFileDialog(
+            currentName = activeActionFile!!.name,
+            onDismiss = { showRenameDialog = false; activeActionFile = null },
+            onConfirm = { newName -> viewModel.renameFile(activeActionFile!!, newName); showRenameDialog = false; activeActionFile = null }
+        )
+    }
+
+    if (showDeleteDialog && activeActionFile != null) {
+        DeleteConfirmationDialog(
+            count = 1,
+            onDismiss = { showDeleteDialog = false; activeActionFile = null },
+            onConfirm = { viewModel.deleteFile(activeActionFile!!); showDeleteDialog = false; activeActionFile = null }
+        )
+    }
+
+    if (showPropertiesDialog && activeActionFile != null) {
+        FilePropertiesDialog(file = activeActionFile!!, onDismiss = { showPropertiesDialog = false; activeActionFile = null })
+    }
+
+    if (showBatchDeleteDialog) {
+        DeleteConfirmationDialog(
+            count = selectedIds.size,
+            onDismiss = { showBatchDeleteDialog = false },
+            onConfirm = { viewModel.deleteSelected(); showBatchDeleteDialog = false }
+        )
+    }
+
     Scaffold(
+        // CORRECCIÓN CLAVE: contentWindowInsets = WindowInsets(0.dp)
+        // Esto evita que el Scaffold agregue espacio extra por las barras de sistema,
+        // ya que MenuScreen ya manejó ese espacio.
+        contentWindowInsets = WindowInsets(0.dp),
         topBar = {
             OpenDocsTopBar(
                 title = "OpenDocs",
@@ -101,7 +160,13 @@ fun HomeScreen(rootNavController: NavController) {
                 onSearchQueryChange = { viewModel.onSearchQueryChange(it) },
                 onSearchClose = { viewModel.onSearchClose() },
                 onPremiumClick = { },
-                onSortClick = if (isSearchActive) { { showSortSheet = true } } else null
+                onSortClick = if (isSearchActive) { { showSortSheet = true } } else null,
+                selectionMode = selectionMode,
+                selectedCount = selectedIds.size,
+                onClearSelection = { viewModel.clearSelection() },
+                onSelectAll = { viewModel.selectAll() },
+                onDelete = { showBatchDeleteDialog = true },
+                onShare = { shareFilesHome(context, viewModel.getSelectedFiles()) }
             )
         }
     ) { paddingValues ->
@@ -112,19 +177,19 @@ fun HomeScreen(rootNavController: NavController) {
                 }
             } else {
                 LazyColumn(
-                    state = searchListState, // Asignar estado
+                    state = searchListState,
                     contentPadding = PaddingValues(16.dp),
                     modifier = Modifier.fillMaxSize().padding(paddingValues)
                 ) {
                     items(items = searchResults, key = { it.id }) { file ->
                         FileListItem(
                             file = file,
-                            isSelected = false,
-                            selectionMode = false,
+                            isSelected = selectedIds.contains(file.id),
+                            selectionMode = selectionMode,
                             onClick = { /* Abrir */ },
-                            onLongClick = { },
+                            onLongClick = { viewModel.toggleSelection(file.id) },
                             onFavoriteClick = { viewModel.toggleFavorite(file) },
-                            onMenuAction = { }
+                            onMenuClick = { selectedFileForOptions = file }
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
@@ -174,4 +239,47 @@ fun HomeScreen(rootNavController: NavController) {
 @Composable
 fun hasStoragePermission(): Boolean {
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager() else true
+}
+
+// Helpers para compartir
+private fun shareFileHome(context: android.content.Context, file: DocFile) {
+    try {
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", File(file.path))
+        val intent = ShareCompat.IntentBuilder(context)
+            .setType(file.mimeType)
+            .setStream(uri)
+            .createChooserIntent()
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        context.startActivity(intent)
+    } catch (e: Exception) { e.printStackTrace() }
+}
+
+private fun shareFilesHome(context: android.content.Context, files: List<DocFile>) {
+    if (files.isEmpty()) return
+    try {
+        val uris = ArrayList<Uri>()
+        files.forEach { file ->
+            uris.add(FileProvider.getUriForFile(context, "${context.packageName}.provider", File(file.path)))
+        }
+        val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = "*/*"
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, "Compartir archivos"))
+    } catch (e: Exception) { e.printStackTrace() }
+}
+
+private fun createShortcutHome(context: android.content.Context, file: DocFile) {
+    if (ShortcutManagerCompat.isRequestPinShortcutSupported(context)) {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(FileProvider.getUriForFile(context, "${context.packageName}.provider", File(file.path)), file.mimeType)
+            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+        }
+        val shortcutInfo = ShortcutInfoCompat.Builder(context, file.id.toString())
+            .setShortLabel(file.name).setLongLabel(file.name)
+            .setIcon(IconCompat.createWithResource(context, R.mipmap.ic_launcher))
+            .setIntent(intent).build()
+        ShortcutManagerCompat.requestPinShortcut(context, shortcutInfo, null)
+    }
 }

@@ -31,7 +31,12 @@ class HomeViewModel(
     private val _sortOption = MutableStateFlow(SortOption.DEFAULT)
     val sortOption = _sortOption.asStateFlow()
 
-    // Pipeline para búsqueda
+    // Selección en Home (para resultados de búsqueda)
+    private val _selectedIds = MutableStateFlow<Set<Long>>(emptySet())
+    val selectedIds: StateFlow<Set<Long>> = _selectedIds.asStateFlow()
+    val selectionMode: StateFlow<Boolean> = _selectedIds.map { it.isNotEmpty() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     val searchResults: StateFlow<List<DocFile>> = combine(_rawSearchResults, _sortOption) { files, sort ->
         sortFiles(files, sort)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -84,17 +89,65 @@ class HomeViewModel(
         _isSearchActive.value = false
         _searchQuery.value = ""
         _rawSearchResults.value = emptyList()
+        clearSelection()
     }
 
     fun toggleFavorite(file: DocFile) {
         viewModelScope.launch {
             docRepository.toggleFavorite(file)
+            // Actualizar localmente la lista de búsqueda
             _rawSearchResults.value = _rawSearchResults.value.map {
                 if(it.id == file.id) it.copy(isFavorite = !it.isFavorite) else it
             }
             refreshStats()
         }
     }
+
+    // Funciones de Gestión de Archivos (Renombrar, Borrar)
+    fun renameFile(file: DocFile, newName: String) {
+        viewModelScope.launch {
+            val success = docRepository.renameFile(file, newName)
+            if (success) {
+                // Actualizar lista localmente
+                _rawSearchResults.value = _rawSearchResults.value.map {
+                    if (it.id == file.id) it.copy(name = newName) else it
+                }
+                refreshStats()
+            }
+        }
+    }
+
+    fun deleteFile(file: DocFile) {
+        viewModelScope.launch {
+            val success = docRepository.deleteFiles(listOf(file))
+            if (success) {
+                _rawSearchResults.value = _rawSearchResults.value.filter { it.id != file.id }
+                refreshStats()
+            }
+        }
+    }
+
+    fun deleteSelected() {
+        val selected = _rawSearchResults.value.filter { _selectedIds.value.contains(it.id) }
+        viewModelScope.launch {
+            val success = docRepository.deleteFiles(selected)
+            if (success) {
+                _rawSearchResults.value = _rawSearchResults.value.filter { !selected.contains(it) }
+                clearSelection()
+                refreshStats()
+            }
+        }
+    }
+
+    // Selección
+    fun toggleSelection(fileId: Long) {
+        _selectedIds.update { current -> if (current.contains(fileId)) current - fileId else current + fileId }
+    }
+    fun selectAll() {
+        _selectedIds.value = searchResults.value.map { it.id }.toSet()
+    }
+    fun clearSelection() { _selectedIds.value = emptySet() }
+    fun getSelectedFiles(): List<DocFile> = _rawSearchResults.value.filter { _selectedIds.value.contains(it.id) }
 }
 
 class HomeViewModelFactory(

@@ -12,7 +12,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,11 +33,10 @@ fun FileListItem(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onFavoriteClick: () -> Unit,
-    onMenuAction: (String) -> Unit
+    onMenuClick: () -> Unit // Cambio: Simple notificación de clic
 ) {
     val backgroundColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface
     val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
-    var showMenu by remember { mutableStateOf(false) }
 
     Row(
         modifier = Modifier
@@ -75,9 +74,9 @@ fun FileListItem(
                 )
             }
 
-            Box {
-                IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, contentDescription = "Opciones") }
-                FileOptionsMenu(expanded = showMenu, onDismiss = { showMenu = false }, onAction = { showMenu = false; onMenuAction(it) })
+            // CORRECCIÓN: Ya no abrimos menú interno, solo avisamos
+            IconButton(onClick = onMenuClick) {
+                Icon(Icons.Default.MoreVert, contentDescription = "Opciones")
             }
         }
     }
