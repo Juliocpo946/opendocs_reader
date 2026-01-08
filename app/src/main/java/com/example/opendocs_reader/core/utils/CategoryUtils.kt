@@ -17,7 +17,6 @@ data class CategoryDef(
 
 object CategoryUtils {
 
-    // Lista maestra de categorías
     val categories = listOf(
         CategoryDef("Todos", "Todos", Icons.Default.Folder, AllFilesColor),
         CategoryDef("PDF", "PDF", Icons.Default.PictureAsPdf, PdfColor),
@@ -28,7 +27,6 @@ object CategoryUtils {
         CategoryDef("Favoritos", "Favoritos", Icons.Default.Star, FavoriteColor)
     )
 
-    // Helper para obtener el conteo dinámicamente según la categoría
     fun getCountForCategory(stats: StorageStats, categoryId: String): Int {
         return when (categoryId) {
             "Todos" -> stats.totalFiles
@@ -42,7 +40,6 @@ object CategoryUtils {
         }
     }
 
-    // Helper para obtener el color del archivo basado en su extensión
     fun getFileColor(ext: String): Color {
         return when {
             ext.contains("pdf", true) -> PdfColor
@@ -52,5 +49,36 @@ object CategoryUtils {
             ext.contains("txt", true) -> TxtColor
             else -> Color.Gray
         }
+    }
+
+    fun getExtensionsForCategory(category: String): List<String> {
+        return when (category) {
+            "PDF" -> listOf("pdf")
+            "Word" -> listOf("doc", "docx")
+            "Excel" -> listOf("xls", "xlsx")
+            "Slide" -> listOf("ppt", "pptx")
+            "Txt" -> listOf("txt", "log", "xml", "csv")
+            else -> emptyList()
+        }
+    }
+
+    fun getCategoryForExtension(extension: String): String {
+        val ext = extension.lowercase()
+        return when {
+            ext == "pdf" -> "PDF"
+            ext.startsWith("doc") -> "Word"
+            ext.startsWith("xls") -> "Excel"
+            ext.startsWith("ppt") -> "Slide"
+            ext == "txt" || ext == "log" || ext == "xml" || ext == "csv" -> "Txt"
+            else -> "Otro"
+        }
+    }
+
+    fun getAllSupportedExtensions(): List<String> {
+        return getExtensionsForCategory("PDF") +
+                getExtensionsForCategory("Word") +
+                getExtensionsForCategory("Excel") +
+                getExtensionsForCategory("Slide") +
+                getExtensionsForCategory("Txt")
     }
 }

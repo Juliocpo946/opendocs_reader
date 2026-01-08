@@ -24,8 +24,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.opendocs_reader.core.data.repository.DocRepositoryImpl
 import com.example.opendocs_reader.core.utils.CategoryUtils
-import com.example.opendocs_reader.features.files.presentation.components.FileGridItem
-import com.example.opendocs_reader.features.files.presentation.components.FileListItem
+import com.example.opendocs_reader.shared.components.FileGridItem
+import com.example.opendocs_reader.shared.components.FileListItem
 import com.example.opendocs_reader.features.files.presentation.viewmodel.FilesViewModel
 import com.example.opendocs_reader.shared.components.FilesTopBar
 import com.example.opendocs_reader.shared.theme.*
