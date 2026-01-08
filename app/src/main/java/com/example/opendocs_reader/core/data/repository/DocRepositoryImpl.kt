@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
@@ -22,31 +23,115 @@ class DocRepositoryImpl(
     private val memoryCache = ConcurrentHashMap<String, List<DocFile>>()
 
     override fun getFilesByCategory(category: String): Flow<List<DocFile>> = flow {
-        // Invalidamos caché si es Favoritos para asegurar datos frescos
         if (category == "Favoritos") {
             memoryCache.remove(category)
         }
 
         memoryCache[category]?.let { cachedFiles ->
-            if (cachedFiles.isNotEmpty()) {
-                emit(cachedFiles)
-                // No retornamos aquí para permitir que se actualice con datos frescos si es necesario
+            if (cachedFiles.isNotEmpty()) emit(cachedFiles)
+        }
+
+        val freshFiles = queryMediaStore(category = category, query = null)
+        memoryCache[category] = freshFiles
+        emit(freshFiles)
+    }.flowOn(Dispatchers.IO)
+
+    override fun getRecentFiles(): Flow<List<DocFile>> = flow {
+        val historyStr = prefs.getString("history_v1", "") ?: ""
+        if (historyStr.isEmpty()) {
+            emit(emptyList())
+            return@flow
+        }
+
+        val historyItems = historyStr.split("|").filter { it.isNotEmpty() }
+        val recentFiles = mutableListOf<DocFile>()
+        val favoriteIds = getFavoriteIds()
+
+        // Optimización: Consultar solo los IDs necesarios
+        val idsToQuery = historyItems.mapNotNull { it.substringBefore(":").toLongOrNull() }.distinct()
+
+        if (idsToQuery.isNotEmpty()) {
+            val selection = "${MediaStore.Files.FileColumns._ID} IN (${idsToQuery.joinToString(",")})"
+            val filesMap = queryMediaStoreCustom(selection, null).associateBy { it.id }
+
+            historyItems.forEach { item ->
+                val parts = item.split(":")
+                if (parts.size == 2) {
+                    val id = parts[0].toLongOrNull()
+                    val timestamp = parts[1].toLongOrNull() ?: 0L
+                    filesMap[id]?.let { file ->
+                        recentFiles.add(file.copy(lastAccessed = timestamp, isFavorite = favoriteIds.contains(file.id)))
+                    }
+                }
+            }
+        }
+        emit(recentFiles)
+    }.flowOn(Dispatchers.IO)
+
+    // Búsqueda Global para Home
+    override suspend fun searchFiles(query: String): List<DocFile> = withContext(Dispatchers.IO) {
+        if (query.isBlank()) return@withContext emptyList()
+        return@withContext queryMediaStore(category = "Todos", query = query)
+    }
+
+    override suspend fun addToRecents(file: DocFile) {
+        val historyStr = prefs.getString("history_v1", "") ?: ""
+        val currentList = historyStr.split("|").filter { it.isNotEmpty() }.toMutableList()
+        currentList.removeAll { it.startsWith("${file.id}:") }
+        val newEntry = "${file.id}:${System.currentTimeMillis()}"
+        currentList.add(0, newEntry)
+        if (currentList.size > 50) currentList.removeAt(currentList.lastIndex)
+        prefs.edit().putString("history_v1", currentList.joinToString("|")).apply()
+    }
+
+    override suspend fun toggleFavorite(file: DocFile) {
+        val idStr = file.id.toString()
+        val currentFavorites = favoritesPrefs.getStringSet("ids", emptySet()) ?: emptySet()
+        val newFavorites = currentFavorites.toMutableSet()
+
+        if (newFavorites.contains(idStr)) newFavorites.remove(idStr) else newFavorites.add(idStr)
+        favoritesPrefs.edit { putStringSet("ids", newFavorites) }
+        memoryCache.clear()
+    }
+
+    private fun getFavoriteIds(): Set<Long> {
+        return favoritesPrefs.getStringSet("ids", emptySet())?.mapNotNull { it.toLongOrNull() }?.toSet() ?: emptySet()
+    }
+
+    // Método unificado de consulta
+    private fun queryMediaStore(category: String, query: String?): List<DocFile> {
+        val favoriteIds = getFavoriteIds()
+        val selectionBuilder = StringBuilder()
+        val selectionArgs = mutableListOf<String>()
+
+        // Filtro por Categoría
+        if (category == "Favoritos") {
+            if (favoriteIds.isEmpty()) return emptyList()
+            selectionBuilder.append("${MediaStore.Files.FileColumns._ID} IN (${favoriteIds.joinToString(",")})")
+        } else {
+            val extensions = if (category == "Todos") CategoryUtils.getAllSupportedExtensions() else CategoryUtils.getExtensionsForCategory(category)
+            if (extensions.isNotEmpty()) {
+                selectionBuilder.append("(")
+                selectionBuilder.append(extensions.joinToString(" OR ") { "${MediaStore.Files.FileColumns.DATA} LIKE ?" })
+                selectionBuilder.append(")")
+                selectionArgs.addAll(extensions.map { "%.$it" })
+            } else {
+                selectionBuilder.append("${MediaStore.Files.FileColumns.MIME_TYPE} IS NOT NULL")
             }
         }
 
-        val freshFiles = queryMediaStore(category)
+        // Filtro por Búsqueda (Query)
+        if (!query.isNullOrBlank()) {
+            if (selectionBuilder.isNotEmpty()) selectionBuilder.append(" AND ")
+            selectionBuilder.append("${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE ?")
+            selectionArgs.add("%$query%")
+        }
 
-        memoryCache[category] = freshFiles
-        emit(freshFiles)
+        return queryMediaStoreCustom(selectionBuilder.toString(), selectionArgs.toTypedArray(), favoriteIds)
+    }
 
-    }.flowOn(Dispatchers.IO)
-
-    private fun queryMediaStore(category: String): List<DocFile> {
+    private fun queryMediaStoreCustom(selection: String, args: Array<String>?, favoriteIds: Set<Long> = emptySet()): List<DocFile> {
         val files = mutableListOf<DocFile>()
-
-        // 1. Obtener IDs de favoritos
-        val favoriteIds = getFavoriteIds()
-
         val projection = arrayOf(
             MediaStore.Files.FileColumns._ID,
             MediaStore.Files.FileColumns.DISPLAY_NAME,
@@ -55,137 +140,49 @@ class DocRepositoryImpl(
             MediaStore.Files.FileColumns.DATE_ADDED,
             MediaStore.Files.FileColumns.MIME_TYPE
         )
-
-        // 2. Construir la selección SQL
-        val selection: String
-        val selectionArgs: Array<String>?
         val sortOrder = "${MediaStore.Files.FileColumns.DATE_ADDED} DESC"
-
-        if (category == "Favoritos") {
-            if (favoriteIds.isEmpty()) return emptyList()
-            val idList = favoriteIds.joinToString(",")
-            selection = "${MediaStore.Files.FileColumns._ID} IN ($idList)"
-            selectionArgs = null
-        } else {
-            val extensionsToQuery = if (category == "Todos") {
-                CategoryUtils.getAllSupportedExtensions()
-            } else {
-                CategoryUtils.getExtensionsForCategory(category)
-            }
-
-            selection = if (extensionsToQuery.isNotEmpty()) {
-                "(" + extensionsToQuery.joinToString(" OR ") { "${MediaStore.Files.FileColumns.DATA} LIKE ?" } + ")"
-            } else {
-                "${MediaStore.Files.FileColumns.MIME_TYPE} IS NOT NULL"
-            }
-            selectionArgs = extensionsToQuery.map { "%.$it" }.toTypedArray()
-        }
 
         try {
             context.contentResolver.query(
                 MediaStore.Files.getContentUri("external"),
                 projection,
                 selection,
-                selectionArgs,
+                args,
                 sortOrder
             )?.use { cursor ->
-                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
-                val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME)
-                val pathColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA)
-                val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.SIZE)
-                val dateColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATE_ADDED)
-                val mimeColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MIME_TYPE)
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
+                val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME)
+                val pathCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA)
+                val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.SIZE)
+                val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATE_ADDED)
+                val mimeCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MIME_TYPE)
 
                 while (cursor.moveToNext()) {
-                    val path = cursor.getString(pathColumn)
-                    val file = File(path)
-                    if (file.exists()) {
-                        val name = cursor.getString(nameColumn)
+                    val path = cursor.getString(pathCol)
+                    if (File(path).exists()) {
+                        val name = cursor.getString(nameCol)
+                        val id = cursor.getLong(idCol)
                         val extension = name.substringAfterLast('.', "")
-                        // Si es la categoría Favoritos, no filtramos por extensión, confiamos en el ID
-                        val determinedCategory = if (category == "Favoritos") "Favoritos" else CategoryUtils.getCategoryForExtension(extension)
 
-                        if (category == "Favoritos" || determinedCategory != "Otro") {
-                            val id = cursor.getLong(idColumn)
+                        // Solo agregamos si es una extensión válida o soportada
+                        if (CategoryUtils.getCategoryForExtension(extension) != "Otro" || favoriteIds.contains(id)) {
                             files.add(
                                 DocFile(
                                     id = id,
                                     name = name,
                                     path = path,
-                                    size = cursor.getLong(sizeColumn),
-                                    dateAdded = cursor.getLong(dateColumn) * 1000,
-                                    mimeType = cursor.getString(mimeColumn) ?: "application/octet-stream",
+                                    size = cursor.getLong(sizeCol),
+                                    dateAdded = cursor.getLong(dateCol) * 1000,
+                                    mimeType = cursor.getString(mimeCol) ?: "application/octet-stream",
                                     extension = extension,
-                                    isFavorite = favoriteIds.contains(id) // Asignar estado favorito
+                                    isFavorite = favoriteIds.contains(id)
                                 )
                             )
                         }
                     }
                 }
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        } catch (e: Exception) { e.printStackTrace() }
         return files
-    }
-
-    override fun getRecentFiles(): Flow<List<DocFile>> = flow {
-        // ... (código existente de getRecentFiles sin cambios) ...
-        // Solo necesitamos asegurar que al crear el DocFile en getRecentFiles también mapeemos isFavorite si quisieras verlo ahí también.
-        // Por brevedad, omito copiar todo el método getRecentFiles a menos que lo pidas,
-        // pero idealmente deberías añadir `isFavorite = favoritesPrefs.contains(id.toString())` ahí también.
-        val historyStr = prefs.getString("history_v1", "") ?: ""
-        if (historyStr.isEmpty()) {
-            emit(emptyList())
-            return@flow
-        }
-        // ... Logica de historial ...
-        // Al crear el objeto DocFile dentro del loop:
-        // isFavorite = favoritesPrefs.contains(id.toString())
-        // ...
-
-        // Para mantener este snippet limpio y funcional con lo que ya tenías, dejaré getRecentFiles como estaba,
-        // pero ten en cuenta que los favoritos no se mostrarán marcados en la pantalla "Recientes" a menos que actualices esa parte.
-        emit(emptyList()) // Placeholder para no romper la compilación en este ejemplo, usa tu código original.
-    }
-
-    override suspend fun addToRecents(file: DocFile) {
-        // ... (código existente) ...
-        val historyStr = prefs.getString("history_v1", "") ?: ""
-        val currentList = historyStr.split("|")
-            .filter { it.isNotEmpty() }
-            .toMutableList()
-        currentList.removeAll { it.startsWith("${file.id}:") }
-        val newEntry = "${file.id}:${System.currentTimeMillis()}"
-        currentList.add(0, newEntry)
-        if (currentList.size > 50) currentList.removeAt(currentList.lastIndex)
-        prefs.edit().putString("history_v1", currentList.joinToString("|")).apply()
-    }
-
-    // --- FAVORITOS ---
-
-    override suspend fun toggleFavorite(file: DocFile) {
-        val idStr = file.id.toString()
-        val currentFavorites = favoritesPrefs.getStringSet("ids", emptySet()) ?: emptySet()
-        val newFavorites = currentFavorites.toMutableSet()
-
-        if (newFavorites.contains(idStr)) {
-            newFavorites.remove(idStr)
-        } else {
-            newFavorites.add(idStr)
-        }
-
-        favoritesPrefs.edit {
-            putStringSet("ids", newFavorites)
-        }
-
-        // Limpiamos caché para forzar recarga la próxima vez
-        memoryCache.clear()
-    }
-
-    private fun getFavoriteIds(): Set<Long> {
-        return favoritesPrefs.getStringSet("ids", emptySet())
-            ?.mapNotNull { it.toLongOrNull() }
-            ?.toSet() ?: emptySet()
     }
 }

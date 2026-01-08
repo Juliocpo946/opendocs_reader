@@ -51,20 +51,19 @@ fun FilesScreen(
 
     val categories = CategoryUtils.categories
     val initialIndex = categories.indexOfFirst { it.id.equals(initialCategory, ignoreCase = true) }.coerceAtLeast(0)
-
     val pagerState = rememberPagerState(initialPage = initialIndex, pageCount = { categories.size })
     val scope = rememberCoroutineScope()
 
     val isGrid by viewModel.isGridMode.collectAsState()
     val files by viewModel.files.collectAsState()
+    val isSearchActive by viewModel.isSearchActive.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
 
-    // Estados de Selección
     val selectedIds by viewModel.selectedIds.collectAsState()
     val selectionMode by viewModel.selectionMode.collectAsState()
 
-    // Manejar el botón "Atrás" del dispositivo
-    BackHandler(enabled = selectionMode) {
-        viewModel.clearSelection()
+    BackHandler(enabled = isSearchActive || selectionMode) {
+        if (selectionMode) viewModel.clearSelection() else viewModel.onSearchClose()
     }
 
     LaunchedEffect(pagerState.currentPage) {
@@ -78,52 +77,58 @@ fun FilesScreen(
                 isGrid = isGrid,
                 selectionMode = selectionMode,
                 selectedCount = selectedIds.size,
+                isSearchActive = isSearchActive,
+                searchQuery = searchQuery,
                 onBackClick = { navController.popBackStack() },
                 onClearSelection = { viewModel.clearSelection() },
                 onSelectAll = { viewModel.selectAll() },
                 onDelete = { viewModel.deleteSelected() },
-                onShare = { /* Implementar compartir */ },
+                onShare = { },
                 onToggleView = { viewModel.toggleViewMode() },
+                onSearchTrigger = { viewModel.onSearchTrigger() },
+                onSearchQueryChange = { viewModel.onSearchQueryChange(it) },
+                onSearchClose = { viewModel.onSearchClose() },
                 onSortClick = { },
-                onSearchClick = { },
                 onPremiumClick = { }
             )
         }
     ) { paddingValues ->
 
         Column(modifier = Modifier.padding(paddingValues)) {
-            ScrollableTabRow(
-                selectedTabIndex = pagerState.currentPage,
-                edgePadding = 16.dp,
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = PrimaryLight,
-                indicator = { tabPositions ->
-                    if (pagerState.currentPage < tabPositions.size) {
-                        TabRowDefaults.SecondaryIndicator(
-                            Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
-                            color = PrimaryLight
+            // Ocultar Tabs si estamos buscando para dar más espacio
+            if (!isSearchActive) {
+                ScrollableTabRow(
+                    selectedTabIndex = pagerState.currentPage,
+                    edgePadding = 16.dp,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = PrimaryLight,
+                    indicator = { tabPositions ->
+                        if (pagerState.currentPage < tabPositions.size) {
+                            TabRowDefaults.SecondaryIndicator(
+                                Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
+                                color = PrimaryLight
+                            )
+                        }
+                    }
+                ) {
+                    categories.forEachIndexed { index, category ->
+                        Tab(
+                            selected = pagerState.currentPage == index,
+                            onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                            text = { Text(text = category.name) }
                         )
                     }
-                }
-            ) {
-                categories.forEachIndexed { index, category ->
-                    Tab(
-                        selected = pagerState.currentPage == index,
-                        onClick = {
-                            scope.launch { pagerState.animateScrollToPage(index) }
-                        },
-                        text = { Text(text = category.name) }
-                    )
                 }
             }
 
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                userScrollEnabled = !isSearchActive // Bloquear swipe lateral al buscar
             ) {
                 if (files.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No se encontraron archivos", color = Color.Gray)
+                        Text(if(searchQuery.isNotEmpty()) "Sin resultados" else "No hay archivos", color = Color.Gray)
                     }
                 } else {
                     if (isGrid) {
@@ -142,14 +147,13 @@ fun FilesScreen(
                                     onClick = { /* Abrir archivo */ },
                                     onLongClick = { viewModel.toggleSelection(file.id) },
                                     onFavoriteClick = { viewModel.toggleFavorite(file) },
-                                    onMenuAction = { action -> /* Manejar menú */ }
+                                    onMenuAction = { }
                                 )
                             }
                         }
                     } else {
                         LazyColumn(
                             contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.Top,
                             modifier = Modifier.fillMaxSize()
                         ) {
                             items(items = files, key = { it.id }) { file ->
@@ -160,7 +164,7 @@ fun FilesScreen(
                                     onClick = { /* Abrir archivo */ },
                                     onLongClick = { viewModel.toggleSelection(file.id) },
                                     onFavoriteClick = { viewModel.toggleFavorite(file) },
-                                    onMenuAction = { action -> /* Manejar menú */ }
+                                    onMenuAction = { }
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
