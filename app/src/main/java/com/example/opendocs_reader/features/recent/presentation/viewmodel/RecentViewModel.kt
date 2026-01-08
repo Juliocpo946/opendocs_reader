@@ -3,6 +3,7 @@ package com.example.opendocs_reader.features.recent.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.opendocs_reader.core.domain.model.DocFile
+import com.example.opendocs_reader.core.domain.model.SortOption
 import com.example.opendocs_reader.core.domain.repository.DocRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -18,15 +19,17 @@ class RecentViewModel(private val repository: DocRepository) : ViewModel() {
     private val _isLoading = MutableStateFlow(true)
     private val _searchQuery = MutableStateFlow("")
     private val _isSearchActive = MutableStateFlow(false)
+    private val _sortOption = MutableStateFlow(SortOption.DEFAULT) // Default: Orden de historial
 
-    // Filtramos localmente
-    val uiState: StateFlow<RecentUiState> = combine(_allFiles, _isLoading, _searchQuery) { files, loading, query ->
+    val uiState: StateFlow<RecentUiState> = combine(_allFiles, _isLoading, _searchQuery, _sortOption) { files, loading, query, sort ->
         val filtered = if (query.isBlank()) files else files.filter { it.name.contains(query, ignoreCase = true) }
-        RecentUiState(files = filtered, isLoading = loading)
+        val sorted = sortFiles(filtered, sort)
+        RecentUiState(files = sorted, isLoading = loading)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), RecentUiState(isLoading = true))
 
     val isSearchActive = _isSearchActive.asStateFlow()
     val searchQuery = _searchQuery.asStateFlow()
+    val sortOption = _sortOption.asStateFlow()
 
     private val _isGridMode = MutableStateFlow(false)
     val isGridMode: StateFlow<Boolean> = _isGridMode.asStateFlow()
@@ -49,7 +52,19 @@ class RecentViewModel(private val repository: DocRepository) : ViewModel() {
         }
     }
 
-    // Búsqueda
+    private fun sortFiles(files: List<DocFile>, option: SortOption): List<DocFile> {
+        return when (option) {
+            SortOption.NAME_ASC -> files.sortedBy { it.name }
+            SortOption.NAME_DESC -> files.sortedByDescending { it.name }
+            SortOption.DATE_NEWEST -> files.sortedByDescending { it.dateAdded }
+            SortOption.DATE_OLDEST -> files.sortedBy { it.dateAdded }
+            SortOption.TYPE -> files.sortedWith(compareBy({ it.extension }, { it.name }))
+            SortOption.DEFAULT -> files
+        }
+    }
+
+    fun onSortChange(option: SortOption) { _sortOption.value = option }
+
     fun onSearchTrigger() { _isSearchActive.value = true }
     fun onSearchQueryChange(query: String) { _searchQuery.value = query }
     fun onSearchClose() {

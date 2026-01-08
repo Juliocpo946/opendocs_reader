@@ -5,9 +5,11 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.*
@@ -28,6 +30,7 @@ import com.example.opendocs_reader.shared.components.FileGridItem
 import com.example.opendocs_reader.shared.components.FileListItem
 import com.example.opendocs_reader.features.files.presentation.viewmodel.FilesViewModel
 import com.example.opendocs_reader.shared.components.FilesTopBar
+import com.example.opendocs_reader.shared.components.SortBottomSheet
 import com.example.opendocs_reader.shared.theme.*
 import kotlinx.coroutines.launch
 
@@ -58,9 +61,12 @@ fun FilesScreen(
     val files by viewModel.files.collectAsState()
     val isSearchActive by viewModel.isSearchActive.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val sortOption by viewModel.sortOption.collectAsState()
 
     val selectedIds by viewModel.selectedIds.collectAsState()
     val selectionMode by viewModel.selectionMode.collectAsState()
+
+    var showSortSheet by remember { mutableStateOf(false) }
 
     BackHandler(enabled = isSearchActive || selectionMode) {
         if (selectionMode) viewModel.clearSelection() else viewModel.onSearchClose()
@@ -68,6 +74,17 @@ fun FilesScreen(
 
     LaunchedEffect(pagerState.currentPage) {
         viewModel.fetchFiles(categories[pagerState.currentPage].id)
+    }
+
+    if (showSortSheet) {
+        SortBottomSheet(
+            currentSort = sortOption,
+            onSortSelected = {
+                viewModel.onSortChange(it)
+                showSortSheet = false
+            },
+            onDismiss = { showSortSheet = false }
+        )
     }
 
     Scaffold(
@@ -88,14 +105,13 @@ fun FilesScreen(
                 onSearchTrigger = { viewModel.onSearchTrigger() },
                 onSearchQueryChange = { viewModel.onSearchQueryChange(it) },
                 onSearchClose = { viewModel.onSearchClose() },
-                onSortClick = { },
+                onSortClick = { showSortSheet = true },
                 onPremiumClick = { }
             )
         }
     ) { paddingValues ->
 
         Column(modifier = Modifier.padding(paddingValues)) {
-            // Ocultar Tabs si estamos buscando para dar más espacio
             if (!isSearchActive) {
                 ScrollableTabRow(
                     selectedTabIndex = pagerState.currentPage,
@@ -124,8 +140,18 @@ fun FilesScreen(
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize(),
-                userScrollEnabled = !isSearchActive // Bloquear swipe lateral al buscar
+                userScrollEnabled = !isSearchActive
             ) {
+                // CORRECCIÓN DE SCROLL: Creamos el estado para la lista y el grid
+                val listState = rememberLazyListState()
+                val gridState = rememberLazyGridState()
+
+                // "¡Oye! Si cambia el orden o la búsqueda, vete al inicio"
+                LaunchedEffect(sortOption, searchQuery) {
+                    listState.scrollToItem(0)
+                    gridState.scrollToItem(0)
+                }
+
                 if (files.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(if(searchQuery.isNotEmpty()) "Sin resultados" else "No hay archivos", color = Color.Gray)
@@ -133,6 +159,7 @@ fun FilesScreen(
                 } else {
                     if (isGrid) {
                         LazyVerticalGrid(
+                            state = gridState, // Asignamos el estado
                             columns = GridCells.Fixed(3),
                             contentPadding = PaddingValues(16.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -144,7 +171,7 @@ fun FilesScreen(
                                     file = file,
                                     isSelected = selectedIds.contains(file.id),
                                     selectionMode = selectionMode,
-                                    onClick = { /* Abrir archivo */ },
+                                    onClick = { /* Abrir */ },
                                     onLongClick = { viewModel.toggleSelection(file.id) },
                                     onFavoriteClick = { viewModel.toggleFavorite(file) },
                                     onMenuAction = { }
@@ -153,6 +180,7 @@ fun FilesScreen(
                         }
                     } else {
                         LazyColumn(
+                            state = listState, // Asignamos el estado
                             contentPadding = PaddingValues(16.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
@@ -161,7 +189,7 @@ fun FilesScreen(
                                     file = file,
                                     isSelected = selectedIds.contains(file.id),
                                     selectionMode = selectionMode,
-                                    onClick = { /* Abrir archivo */ },
+                                    onClick = { /* Abrir */ },
                                     onLongClick = { viewModel.toggleSelection(file.id) },
                                     onFavoriteClick = { viewModel.toggleFavorite(file) },
                                     onMenuAction = { }

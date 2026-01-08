@@ -66,7 +66,6 @@ fun MenuScreen(rootNavController: NavController) {
             }
             composable(route = Screen.Recent.route) {
                 RecentScreen(
-                    navController = rootNavController,
                     viewModel = recentViewModel
                 )
             }

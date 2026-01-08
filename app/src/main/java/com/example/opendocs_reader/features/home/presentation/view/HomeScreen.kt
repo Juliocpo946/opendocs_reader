@@ -11,6 +11,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -35,6 +36,7 @@ import com.example.opendocs_reader.features.home.presentation.viewmodel.HomeView
 import com.example.opendocs_reader.features.home.presentation.viewmodel.HomeViewModelFactory
 import com.example.opendocs_reader.shared.components.FileListItem
 import com.example.opendocs_reader.shared.components.OpenDocsTopBar
+import com.example.opendocs_reader.shared.components.SortBottomSheet
 
 @Composable
 fun HomeScreen(rootNavController: NavController) {
@@ -50,8 +52,13 @@ fun HomeScreen(rootNavController: NavController) {
     val isSearchActive by viewModel.isSearchActive.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
+    val sortOption by viewModel.sortOption.collectAsState()
 
     val lifecycleOwner = LocalLifecycleOwner.current
+    var showSortSheet by remember { mutableStateOf(false) }
+
+    // CORRECCIÓN DE SCROLL para resultados de búsqueda
+    val searchListState = rememberLazyListState()
 
     val storagePermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -69,6 +76,21 @@ fun HomeScreen(rootNavController: NavController) {
         viewModel.onSearchClose()
     }
 
+    // Resetear scroll si cambia el orden mientras se busca
+    LaunchedEffect(sortOption, searchQuery) {
+        if (isSearchActive) {
+            searchListState.scrollToItem(0)
+        }
+    }
+
+    if (showSortSheet) {
+        SortBottomSheet(
+            currentSort = sortOption,
+            onSortSelected = { viewModel.onSortChange(it); showSortSheet = false },
+            onDismiss = { showSortSheet = false }
+        )
+    }
+
     Scaffold(
         topBar = {
             OpenDocsTopBar(
@@ -78,8 +100,8 @@ fun HomeScreen(rootNavController: NavController) {
                 onSearchTrigger = { viewModel.onSearchTrigger() },
                 onSearchQueryChange = { viewModel.onSearchQueryChange(it) },
                 onSearchClose = { viewModel.onSearchClose() },
-                onPremiumClick = { /* Acción Premium */ },
-                // No pasamos onToggleView ni selectionMode porque Home no los usa
+                onPremiumClick = { },
+                onSortClick = if (isSearchActive) { { showSortSheet = true } } else null
             )
         }
     ) { paddingValues ->
@@ -90,6 +112,7 @@ fun HomeScreen(rootNavController: NavController) {
                 }
             } else {
                 LazyColumn(
+                    state = searchListState, // Asignar estado
                     contentPadding = PaddingValues(16.dp),
                     modifier = Modifier.fillMaxSize().padding(paddingValues)
                 ) {

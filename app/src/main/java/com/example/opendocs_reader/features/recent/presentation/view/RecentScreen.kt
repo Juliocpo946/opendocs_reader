@@ -4,9 +4,11 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,7 +22,6 @@ import com.example.opendocs_reader.core.utils.FileUtils
 
 @Composable
 fun RecentScreen(
-    navController: NavController,
     viewModel: RecentViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -29,33 +30,55 @@ fun RecentScreen(
     val selectionMode by viewModel.selectionMode.collectAsState()
     val isSearchActive by viewModel.isSearchActive.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val sortOption by viewModel.sortOption.collectAsState()
+
+    var showSortSheet by remember { mutableStateOf(false) }
+
+    // CORRECCIÓN DE SCROLL
+    val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
 
     LaunchedEffect(Unit) { viewModel.refresh() }
 
+    // Resetear scroll al ordenar o buscar
+    LaunchedEffect(sortOption, searchQuery) {
+        listState.scrollToItem(0)
+        gridState.scrollToItem(0)
+    }
+
     BackHandler(enabled = isSearchActive || selectionMode) {
         if (selectionMode) viewModel.clearSelection() else viewModel.onSearchClose()
+    }
+
+    if (showSortSheet) {
+        SortBottomSheet(
+            currentSort = sortOption,
+            onSortSelected = {
+                viewModel.onSortChange(it)
+                showSortSheet = false
+            },
+            onDismiss = { showSortSheet = false }
+        )
     }
 
     Scaffold(
         topBar = {
             OpenDocsTopBar(
                 title = "Recientes",
-                // Búsqueda
                 isSearchActive = isSearchActive,
                 searchQuery = searchQuery,
                 onSearchTrigger = { viewModel.onSearchTrigger() },
                 onSearchQueryChange = { viewModel.onSearchQueryChange(it) },
                 onSearchClose = { viewModel.onSearchClose() },
-                // Selección
                 selectionMode = selectionMode,
                 selectedCount = selectedIds.size,
                 onClearSelection = { viewModel.clearSelection() },
                 onSelectAll = { viewModel.selectAll() },
                 onDelete = { viewModel.deleteSelected() },
-                // Vista (Grid/List) - Solo Recientes tiene esto
                 isGrid = isGrid,
                 onToggleView = { viewModel.toggleViewMode() },
-                onPremiumClick = { }
+                onPremiumClick = { },
+                onSortClick = { showSortSheet = true }
             )
         }
     ) { paddingValues ->
@@ -72,6 +95,7 @@ fun RecentScreen(
                 else -> {
                     if (isGrid) {
                         LazyVerticalGrid(
+                            state = gridState, // Asignar estado
                             columns = GridCells.Fixed(3),
                             contentPadding = PaddingValues(16.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -92,6 +116,7 @@ fun RecentScreen(
                         }
                     } else {
                         LazyColumn(
+                            state = listState, // Asignar estado
                             contentPadding = PaddingValues(16.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {

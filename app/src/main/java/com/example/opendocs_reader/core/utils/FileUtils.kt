@@ -1,8 +1,6 @@
 package com.example.opendocs_reader.core.utils
 
 import android.annotation.SuppressLint
-import androidx.compose.ui.graphics.Color
-import com.example.opendocs_reader.shared.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -20,7 +18,8 @@ object FileUtils {
 
     fun formatDate(date: Long): String {
         val sdf = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
-        // Multiplicamos por 1000 porque MediaStore entrega segundos, Java Date usa milisegundos
-        return sdf.format(Date(date * 1000))
+        // CORRECCIÓN: Quitamos el "* 1000" aquí porque el Repositorio ya nos entrega
+        // el dato en milisegundos. Si multiplicamos de nuevo, la fecha sale mal.
+        return sdf.format(Date(date))
     }
 }
