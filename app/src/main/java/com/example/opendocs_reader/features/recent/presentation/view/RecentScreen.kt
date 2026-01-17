@@ -1,7 +1,5 @@
 package com.example.opendocs_reader.features.recent.presentation.view
 
-import android.content.Intent
-import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,20 +16,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.app.ShareCompat
-import androidx.core.content.FileProvider
-import androidx.core.content.pm.ShortcutInfoCompat
-import androidx.core.content.pm.ShortcutManagerCompat
-import androidx.core.graphics.drawable.IconCompat
-import com.example.opendocs_reader.R
+import androidx.navigation.NavController
 import com.example.opendocs_reader.features.recent.presentation.viewmodel.RecentViewModel
 import com.example.opendocs_reader.shared.components.*
 import com.example.opendocs_reader.core.utils.FileUtils
+import com.example.opendocs_reader.core.utils.FileActionsUtils
 import com.example.opendocs_reader.core.domain.model.DocFile
-import java.io.File
 
 @Composable
 fun RecentScreen(
+    navController: NavController,
     viewModel: RecentViewModel
 ) {
     val context = LocalContext.current
@@ -80,11 +74,17 @@ fun RecentScreen(
             file = file,
             onDismiss = { selectedFileForOptions = null },
             onFavorite = { viewModel.toggleFavorite(file); selectedFileForOptions = null },
-            onShare = { shareFileRecent(context, file); selectedFileForOptions = null },
+            onShare = {
+                FileActionsUtils.shareFile(context, file)
+                selectedFileForOptions = null
+            },
             onRename = { activeActionFile = file; showRenameDialog = true; selectedFileForOptions = null },
             onDelete = { activeActionFile = file; showDeleteDialog = true; selectedFileForOptions = null },
             onProperties = { activeActionFile = file; showPropertiesDialog = true; selectedFileForOptions = null },
-            onShortcut = { createShortcutRecent(context, file); selectedFileForOptions = null }
+            onShortcut = {
+                FileActionsUtils.createShortcut(context, file)
+                selectedFileForOptions = null
+            }
         )
     }
 
@@ -117,7 +117,6 @@ fun RecentScreen(
     }
 
     Scaffold(
-        // CORRECCIÓN CLAVE: contentWindowInsets = WindowInsets(0.dp)
         contentWindowInsets = WindowInsets(0.dp),
         topBar = {
             OpenDocsTopBar(
@@ -132,7 +131,7 @@ fun RecentScreen(
                 onClearSelection = { viewModel.clearSelection() },
                 onSelectAll = { viewModel.selectAll() },
                 onDelete = { showBatchDeleteDialog = true },
-                onShare = { shareFilesRecent(context, viewModel.getSelectedFiles()) },
+                onShare = { FileActionsUtils.shareFiles(context, viewModel.getSelectedFiles()) },
                 isGrid = isGrid,
                 onToggleView = { viewModel.toggleViewMode() },
                 onPremiumClick = { },
@@ -165,7 +164,7 @@ fun RecentScreen(
                                     file = file,
                                     isSelected = selectedIds.contains(file.id),
                                     selectionMode = selectionMode,
-                                    onClick = { viewModel.openFile(file) },
+                                    onClick = { FileActionsUtils.openFile(navController, file) },
                                     onLongClick = { viewModel.toggleSelection(file.id) },
                                     onFavoriteClick = { viewModel.toggleFavorite(file) },
                                     onMenuClick = { selectedFileForOptions = file }
@@ -184,7 +183,7 @@ fun RecentScreen(
                                     isSelected = selectedIds.contains(file.id),
                                     selectionMode = selectionMode,
                                     subtitleOverride = "Visto: ${FileUtils.formatDate(file.lastAccessed)}",
-                                    onClick = { viewModel.openFile(file) },
+                                    onClick = { FileActionsUtils.openFile(navController, file) },
                                     onLongClick = { viewModel.toggleSelection(file.id) },
                                     onFavoriteClick = { viewModel.toggleFavorite(file) },
                                     onMenuClick = { selectedFileForOptions = file }
@@ -196,46 +195,5 @@ fun RecentScreen(
                 }
             }
         }
-    }
-}
-
-// Helpers
-private fun shareFileRecent(context: android.content.Context, file: DocFile) {
-    try {
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", File(file.path))
-        val intent = ShareCompat.IntentBuilder(context)
-            .setType(file.mimeType)
-            .setStream(uri)
-            .createChooserIntent()
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        context.startActivity(intent)
-    } catch (e: Exception) { e.printStackTrace() }
-}
-
-private fun shareFilesRecent(context: android.content.Context, files: List<DocFile>) {
-    if (files.isEmpty()) return
-    try {
-        val uris = ArrayList<Uri>()
-        files.forEach { file -> uris.add(FileProvider.getUriForFile(context, "${context.packageName}.provider", File(file.path))) }
-        val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-            type = "*/*"
-            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(intent, "Compartir archivos"))
-    } catch (e: Exception) { e.printStackTrace() }
-}
-
-private fun createShortcutRecent(context: android.content.Context, file: DocFile) {
-    if (ShortcutManagerCompat.isRequestPinShortcutSupported(context)) {
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(FileProvider.getUriForFile(context, "${context.packageName}.provider", File(file.path)), file.mimeType)
-            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-        }
-        val shortcutInfo = ShortcutInfoCompat.Builder(context, file.id.toString())
-            .setShortLabel(file.name).setLongLabel(file.name)
-            .setIcon(IconCompat.createWithResource(context, R.mipmap.ic_launcher))
-            .setIntent(intent).build()
-        ShortcutManagerCompat.requestPinShortcut(context, shortcutInfo, null)
     }
 }

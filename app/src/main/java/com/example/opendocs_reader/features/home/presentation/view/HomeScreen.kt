@@ -22,27 +22,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.app.ShareCompat
-import androidx.core.content.FileProvider
-import androidx.core.content.pm.ShortcutInfoCompat
-import androidx.core.content.pm.ShortcutManagerCompat
-import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.example.opendocs_reader.R
 import com.example.opendocs_reader.core.data.repository.DocRepositoryImpl
 import com.example.opendocs_reader.core.data.repository.StatsRepositoryImpl
 import com.example.opendocs_reader.core.domain.model.DocFile
 import com.example.opendocs_reader.core.navigation.Screen
+import com.example.opendocs_reader.core.utils.FileActionsUtils
 import com.example.opendocs_reader.features.home.presentation.components.DocCategoryGrid
 import com.example.opendocs_reader.features.home.presentation.components.StorageInfoBanner
 import com.example.opendocs_reader.features.home.presentation.viewmodel.HomeViewModel
 import com.example.opendocs_reader.features.home.presentation.viewmodel.HomeViewModelFactory
 import com.example.opendocs_reader.shared.components.*
-import java.io.File
 
 @Composable
 fun HomeScreen(rootNavController: NavController) {
@@ -110,11 +104,17 @@ fun HomeScreen(rootNavController: NavController) {
             file = file,
             onDismiss = { selectedFileForOptions = null },
             onFavorite = { viewModel.toggleFavorite(file); selectedFileForOptions = null },
-            onShare = { shareFileHome(context, file); selectedFileForOptions = null },
+            onShare = {
+                FileActionsUtils.shareFile(context, file)
+                selectedFileForOptions = null
+            },
             onRename = { activeActionFile = file; showRenameDialog = true; selectedFileForOptions = null },
             onDelete = { activeActionFile = file; showDeleteDialog = true; selectedFileForOptions = null },
             onProperties = { activeActionFile = file; showPropertiesDialog = true; selectedFileForOptions = null },
-            onShortcut = { createShortcutHome(context, file); selectedFileForOptions = null }
+            onShortcut = {
+                FileActionsUtils.createShortcut(context, file)
+                selectedFileForOptions = null
+            }
         )
     }
 
@@ -147,9 +147,6 @@ fun HomeScreen(rootNavController: NavController) {
     }
 
     Scaffold(
-        // CORRECCIÓN CLAVE: contentWindowInsets = WindowInsets(0.dp)
-        // Esto evita que el Scaffold agregue espacio extra por las barras de sistema,
-        // ya que MenuScreen ya manejó ese espacio.
         contentWindowInsets = WindowInsets(0.dp),
         topBar = {
             OpenDocsTopBar(
@@ -166,7 +163,7 @@ fun HomeScreen(rootNavController: NavController) {
                 onClearSelection = { viewModel.clearSelection() },
                 onSelectAll = { viewModel.selectAll() },
                 onDelete = { showBatchDeleteDialog = true },
-                onShare = { shareFilesHome(context, viewModel.getSelectedFiles()) }
+                onShare = { FileActionsUtils.shareFiles(context, viewModel.getSelectedFiles()) }
             )
         }
     ) { paddingValues ->
@@ -186,7 +183,7 @@ fun HomeScreen(rootNavController: NavController) {
                             file = file,
                             isSelected = selectedIds.contains(file.id),
                             selectionMode = selectionMode,
-                            onClick = { /* Abrir */ },
+                            onClick = { FileActionsUtils.openFile(rootNavController, file) },
                             onLongClick = { viewModel.toggleSelection(file.id) },
                             onFavoriteClick = { viewModel.toggleFavorite(file) },
                             onMenuClick = { selectedFileForOptions = file }
@@ -239,47 +236,4 @@ fun HomeScreen(rootNavController: NavController) {
 @Composable
 fun hasStoragePermission(): Boolean {
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager() else true
-}
-
-// Helpers para compartir
-private fun shareFileHome(context: android.content.Context, file: DocFile) {
-    try {
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", File(file.path))
-        val intent = ShareCompat.IntentBuilder(context)
-            .setType(file.mimeType)
-            .setStream(uri)
-            .createChooserIntent()
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        context.startActivity(intent)
-    } catch (e: Exception) { e.printStackTrace() }
-}
-
-private fun shareFilesHome(context: android.content.Context, files: List<DocFile>) {
-    if (files.isEmpty()) return
-    try {
-        val uris = ArrayList<Uri>()
-        files.forEach { file ->
-            uris.add(FileProvider.getUriForFile(context, "${context.packageName}.provider", File(file.path)))
-        }
-        val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-            type = "*/*"
-            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(intent, "Compartir archivos"))
-    } catch (e: Exception) { e.printStackTrace() }
-}
-
-private fun createShortcutHome(context: android.content.Context, file: DocFile) {
-    if (ShortcutManagerCompat.isRequestPinShortcutSupported(context)) {
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(FileProvider.getUriForFile(context, "${context.packageName}.provider", File(file.path)), file.mimeType)
-            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-        }
-        val shortcutInfo = ShortcutInfoCompat.Builder(context, file.id.toString())
-            .setShortLabel(file.name).setLongLabel(file.name)
-            .setIcon(IconCompat.createWithResource(context, R.mipmap.ic_launcher))
-            .setIntent(intent).build()
-        ShortcutManagerCompat.requestPinShortcut(context, shortcutInfo, null)
-    }
 }
