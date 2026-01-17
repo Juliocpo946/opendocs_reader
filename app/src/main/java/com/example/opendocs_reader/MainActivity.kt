@@ -22,6 +22,7 @@ import com.example.opendocs_reader.core.navigation.Screen
 import com.example.opendocs_reader.core.utils.LocaleUtils
 import com.example.opendocs_reader.features.files.presentation.view.FilesScreen
 import com.example.opendocs_reader.features.menu.presentation.view.MenuScreen
+import com.example.opendocs_reader.features.pdf.presentation.view.PdfViewerScreen //
 import com.example.opendocs_reader.features.settings.domain.model.AppLanguage
 import com.example.opendocs_reader.features.settings.domain.model.AppTheme
 import com.example.opendocs_reader.features.settings.presentation.viewmodel.SettingsViewModel
@@ -76,6 +77,24 @@ class MainActivity : ComponentActivity() {
                         ) { backStackEntry ->
                             val category = backStackEntry.arguments?.getString("category") ?: "Todos"
                             FilesScreen(navController = mainNavController, initialCategory = category)
+                        }
+
+                        // --- NUEVA RUTA PARA PDF ---
+                        composable(
+                            route = Screen.PdfViewer.route,
+                            arguments = listOf(
+                                navArgument("fileUri") { type = NavType.StringType },
+                                navArgument("fileName") { type = NavType.StringType }
+                            )
+                        ) { backStackEntry ->
+                            val fileUri = backStackEntry.arguments?.getString("fileUri") ?: ""
+                            val fileName = backStackEntry.arguments?.getString("fileName") ?: "Documento"
+
+                            PdfViewerScreen(
+                                navController = mainNavController,
+                                fileUri = fileUri,
+                                fileName = fileName
+                            )
                         }
                     }
                 }
