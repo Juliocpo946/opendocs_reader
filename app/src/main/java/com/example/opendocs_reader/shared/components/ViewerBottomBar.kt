@@ -1,43 +1,78 @@
 package com.example.opendocs_reader.shared.components
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 
 @Composable
 fun ViewerBottomBar(
     currentPage: Int,
     totalPages: Int,
-    onPreviousPage: () -> Unit,
-    onNextPage: () -> Unit
+    onConfigClick: () -> Unit,
+    onThumbnailsClick: () -> Unit,
+    onPrintClick: () -> Unit,    // Nuevo
+    onPresentClick: () -> Unit,  // Nuevo
+    onMoreClick: () -> Unit
 ) {
-    BottomAppBar(
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface
+    Surface(
+        tonalElevation = 3.dp,
+        color = MaterialTheme.colorScheme.surface
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(vertical = 8.dp)
         ) {
-            IconButton(onClick = onPreviousPage, enabled = currentPage > 0) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Página anterior")
+            // Indicador de página
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "${currentPage + 1} / $totalPages",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
 
-            Text(
-                text = "Página ${currentPage + 1} de $totalPages",
-                style = MaterialTheme.typography.bodyMedium
-            )
+            HorizontalDivider()
 
-            IconButton(onClick = onNextPage, enabled = currentPage < totalPages - 1) {
-                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Siguiente página")
+            // Botones de acción (Sin repetidos)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                // Configuración
+                IconButton(onClick = onConfigClick) {
+                    Icon(Icons.Default.Settings, contentDescription = "Configuración")
+                }
+                // Miniaturas
+                IconButton(onClick = onThumbnailsClick) {
+                    Icon(Icons.Default.GridView, contentDescription = "Miniaturas")
+                }
+                // Presentar (Diapositivas)
+                IconButton(onClick = onPresentClick) {
+                    Icon(Icons.Default.Slideshow, contentDescription = "Presentar")
+                }
+                // Imprimir
+                IconButton(onClick = onPrintClick) {
+                    Icon(Icons.Default.Print, contentDescription = "Imprimir")
+                }
+                // Más opciones (aquí están Compartir y Favoritos)
+                IconButton(onClick = onMoreClick) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "Más opciones")
+                }
             }
         }
     }

@@ -6,39 +6,65 @@ import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.opendocs_reader.core.domain.model.DocFile
+import com.example.opendocs_reader.core.domain.repository.DocRepository
+import com.example.opendocs_reader.shared.components.ScrollMode
+import com.example.opendocs_reader.shared.components.ViewerTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.io.File
 
 data class PdfUiState(
     val isLoading: Boolean = true,
     val isError: Boolean = false,
     val errorMessage: String? = null,
     val totalPages: Int = 0,
-    val currentPageIndex: Int = 0,
-    val currentPageBitmap: Bitmap? = null
+    val currentFile: DocFile? = null,
+    val viewerTheme: ViewerTheme = ViewerTheme.LIGHT,
+    val scrollMode: ScrollMode = ScrollMode.VERTICAL, // Por defecto Vertical
+    val keepScreenOn: Boolean = false,
+    val isLandscape: Boolean = false,
+    val isFavorite: Boolean = false
 )
 
-class PdfViewerViewModel(application: Application) : AndroidViewModel(application) {
+class PdfViewerViewModelFactory(
+    private val application: Application,
+    private val repository: DocRepository
+) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(PdfViewerViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return PdfViewerViewModel(application, repository) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}
+
+class PdfViewerViewModel(
+    application: Application,
+    private val repository: DocRepository
+) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(PdfUiState())
     val uiState: StateFlow<PdfUiState> = _uiState.asStateFlow()
 
     private var pdfRenderer: PdfRenderer? = null
     private var fileDescriptor: ParcelFileDescriptor? = null
+    private val rendererMutex = Mutex()
 
     fun loadPdf(fileUri: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val uri = Uri.parse(fileUri)
                 val contentResolver = getApplication<Application>().contentResolver
-
-                // Abrimos el descriptor del archivo de forma segura
                 fileDescriptor = contentResolver.openFileDescriptor(uri, "r")
 
                 fileDescriptor?.let { fd ->
@@ -47,68 +73,74 @@ class PdfViewerViewModel(application: Application) : AndroidViewModel(applicatio
 
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        totalPages = pageCount,
-                        currentPageIndex = 0
+                        totalPages = pageCount
                     )
-
-                    // Renderizar la primera página
-                    renderPage(0)
-                } ?: run {
-                    _uiState.value = _uiState.value.copy(isLoading = false, isError = true, errorMessage = "No se pudo abrir el archivo")
                 }
-
             } catch (e: Exception) {
-                e.printStackTrace()
                 _uiState.value = _uiState.value.copy(isLoading = false, isError = true, errorMessage = e.localizedMessage)
             }
         }
     }
 
-    fun nextPage() {
-        val currentState = _uiState.value
-        if (currentState.currentPageIndex < currentState.totalPages - 1) {
-            renderPage(currentState.currentPageIndex + 1)
-        }
-    }
+    suspend fun renderPage(index: Int): Bitmap? = withContext(Dispatchers.IO) {
+        rendererMutex.withLock {
+            if (pdfRenderer == null || index < 0 || index >= (_uiState.value.totalPages)) return@withContext null
 
-    fun previousPage() {
-        val currentState = _uiState.value
-        if (currentState.currentPageIndex > 0) {
-            renderPage(currentState.currentPageIndex - 1)
-        }
-    }
-
-    private fun renderPage(index: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
+            return@withContext try {
                 pdfRenderer?.openPage(index)?.use { page ->
-                    // Crear bitmap con alta calidad (se puede ajustar la escala para zoom)
-                    val bitmap = Bitmap.createBitmap(
-                        page.width * 2, // Escala x2 para mejor definición
-                        page.height * 2,
-                        Bitmap.Config.ARGB_8888
-                    )
-
+                    val width = page.width * 2
+                    val height = page.height * 2
+                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
                     page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-
-                    _uiState.value = _uiState.value.copy(
-                        currentPageIndex = index,
-                        currentPageBitmap = bitmap
-                    )
+                    bitmap
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                null
+            }
+        }
+    }
+
+    fun toggleScreenOn(enabled: Boolean) { _uiState.value = _uiState.value.copy(keepScreenOn = enabled) }
+    fun toggleOrientation() { _uiState.value = _uiState.value.copy(isLandscape = !_uiState.value.isLandscape) }
+    fun setTheme(theme: ViewerTheme) { _uiState.value = _uiState.value.copy(viewerTheme = theme) }
+    fun setScrollMode(mode: ScrollMode) { _uiState.value = _uiState.value.copy(scrollMode = mode) }
+
+    fun setFileContext(file: DocFile) {
+        _uiState.value = _uiState.value.copy(currentFile = file, isFavorite = file.isFavorite)
+    }
+
+    fun toggleFavorite() {
+        _uiState.value.currentFile?.let { file ->
+            viewModelScope.launch {
+                repository.toggleFavorite(file)
+                _uiState.value = _uiState.value.copy(isFavorite = !file.isFavorite, currentFile = file.copy(isFavorite = !file.isFavorite))
+            }
+        }
+    }
+
+    fun renameFile(newName: String, onComplete: () -> Unit) {
+        _uiState.value.currentFile?.let { file ->
+            viewModelScope.launch {
+                if (repository.renameFile(file, newName)) {
+                    _uiState.value = _uiState.value.copy(currentFile = file.copy(name = newName))
+                    onComplete()
+                }
+            }
+        }
+    }
+
+    fun deleteFile(onComplete: () -> Unit) {
+        _uiState.value.currentFile?.let { file ->
+            viewModelScope.launch {
+                if (repository.deleteFiles(listOf(file))) onComplete()
             }
         }
     }
 
     override fun onCleared() {
         super.onCleared()
-        try {
-            pdfRenderer?.close()
-            fileDescriptor?.close()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        pdfRenderer?.close()
+        fileDescriptor?.close()
     }
 }

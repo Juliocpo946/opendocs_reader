@@ -19,13 +19,21 @@ object FileActionsUtils {
     fun openFile(navController: NavController, file: DocFile) {
         if (file.extension.equals("pdf", ignoreCase = true)) {
             val validUri = "file://${file.path}"
-            navController.navigate(Screen.PdfViewer.createRoute(validUri, file.name))
+            navController.navigate(
+                Screen.PdfViewer.createRoute(
+                    uri = validUri,
+                    name = file.name,
+                    id = file.id,
+                    mime = file.mimeType,
+                    size = file.size,
+                    date = file.dateAdded
+                )
+            )
         }
     }
 
     fun shareFile(context: Context, file: DocFile) {
         try {
-            // La autoridad debe coincidir con lo declarado en el AndroidManifest.xml
             val authority = "${context.packageName}.provider"
             val uri = FileProvider.getUriForFile(context, authority, File(file.path))
 
@@ -53,7 +61,7 @@ object FileActionsUtils {
             }
 
             val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-                type = "*/*" // Puedes ajustar esto si todos son del mismo tipo
+                type = "*/*"
                 putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }

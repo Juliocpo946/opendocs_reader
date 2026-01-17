@@ -1,5 +1,6 @@
 package com.example.opendocs_reader
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -22,7 +23,7 @@ import com.example.opendocs_reader.core.navigation.Screen
 import com.example.opendocs_reader.core.utils.LocaleUtils
 import com.example.opendocs_reader.features.files.presentation.view.FilesScreen
 import com.example.opendocs_reader.features.menu.presentation.view.MenuScreen
-import com.example.opendocs_reader.features.pdf.presentation.view.PdfViewerScreen //
+import com.example.opendocs_reader.features.pdf.presentation.view.PdfViewerScreen
 import com.example.opendocs_reader.features.settings.domain.model.AppLanguage
 import com.example.opendocs_reader.features.settings.domain.model.AppTheme
 import com.example.opendocs_reader.features.settings.presentation.viewmodel.SettingsViewModel
@@ -50,26 +51,16 @@ class MainActivity : ComponentActivity() {
                 else -> isSystemInDarkTheme()
             }
 
-            // Ya no pasamos animaciones manuales, el tema lo hace todo internamente
             Opendocs_readerTheme(darkTheme = useDarkTheme, dynamicColor = false) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     val mainNavController = rememberNavController()
 
-                    NavHost(
-                        navController = mainNavController,
-                        startDestination = Screen.Splash.route
-                    ) {
+                    NavHost(navController = mainNavController, startDestination = Screen.Splash.route) {
                         composable(route = Screen.Splash.route) {
                             SplashScreen(navController = mainNavController)
                         }
                         composable(route = Screen.Menu.route) {
-                            MenuScreen(
-                                rootNavController = mainNavController,
-                                settingsViewModel = settingsViewModel
-                            )
+                            MenuScreen(rootNavController = mainNavController, settingsViewModel = settingsViewModel)
                         }
                         composable(
                             route = Screen.Files.route,
@@ -79,21 +70,36 @@ class MainActivity : ComponentActivity() {
                             FilesScreen(navController = mainNavController, initialCategory = category)
                         }
 
-                        // --- NUEVA RUTA PARA PDF ---
+                        // --- RUTA PDF ACTUALIZADA ---
                         composable(
                             route = Screen.PdfViewer.route,
                             arguments = listOf(
                                 navArgument("fileUri") { type = NavType.StringType },
-                                navArgument("fileName") { type = NavType.StringType }
+                                navArgument("fileName") { type = NavType.StringType },
+                                navArgument("fileId") { type = NavType.LongType },
+                                navArgument("fileMime") { type = NavType.StringType },
+                                navArgument("fileSize") { type = NavType.LongType },
+                                navArgument("fileDate") { type = NavType.LongType }
                             )
                         ) { backStackEntry ->
                             val fileUri = backStackEntry.arguments?.getString("fileUri") ?: ""
                             val fileName = backStackEntry.arguments?.getString("fileName") ?: "Documento"
+                            val fileId = backStackEntry.arguments?.getLong("fileId") ?: -1L
+                            val fileMimeRaw = backStackEntry.arguments?.getString("fileMime") ?: "*/*"
+                            val fileSize = backStackEntry.arguments?.getLong("fileSize") ?: 0L
+                            val fileDate = backStackEntry.arguments?.getLong("fileDate") ?: 0L
+
+                            // Decodificar MIME por si acaso
+                            val fileMime = Uri.decode(fileMimeRaw)
 
                             PdfViewerScreen(
                                 navController = mainNavController,
                                 fileUri = fileUri,
-                                fileName = fileName
+                                fileName = fileName,
+                                fileId = fileId,
+                                fileMime = fileMime,
+                                fileSize = fileSize,
+                                fileDate = fileDate
                             )
                         }
                     }
