@@ -111,13 +111,24 @@ class DocRepositoryImpl(
 
     override suspend fun deleteFiles(files: List<DocFile>): Boolean = withContext(Dispatchers.IO) {
         var success = true
+
+        val currentFavorites = favoritesPrefs.getStringSet("ids", emptySet())?.toMutableSet() ?: mutableSetOf()
+        var favoritesChanged = false
+
         files.forEach { file ->
             try {
                 val contentUri = ContentUris.withAppendedId(MediaStore.Files.getContentUri("external"), file.id)
                 val rows = context.contentResolver.delete(contentUri, null, null)
+
                 if (rows > 0) {
                     val physicalFile = File(file.path)
                     if (physicalFile.exists()) physicalFile.delete()
+
+                    val idStr = file.id.toString()
+                    if (currentFavorites.contains(idStr)) {
+                        currentFavorites.remove(idStr)
+                        favoritesChanged = true
+                    }
                 } else {
                     success = false
                 }
@@ -125,6 +136,11 @@ class DocRepositoryImpl(
                 success = false
             }
         }
+
+        if (favoritesChanged) {
+            favoritesPrefs.edit { putStringSet("ids", currentFavorites) }
+        }
+
         if (success) memoryCache.clear()
         return@withContext success
     }

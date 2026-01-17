@@ -1,14 +1,16 @@
 package com.example.opendocs_reader.features.files.presentation.viewmodel
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.opendocs_reader.core.domain.model.DocFile
 import com.example.opendocs_reader.core.domain.model.SortOption
 import com.example.opendocs_reader.core.domain.repository.DocRepository
+import com.example.opendocs_reader.shared.viewmodel.BaseFileViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
-class FilesViewModel(private val repository: DocRepository) : ViewModel() {
+class FilesViewModel(
+    private val repository: DocRepository
+) : BaseFileViewModel(repository) {
 
     private val _allFiles = MutableStateFlow<List<DocFile>>(emptyList())
     private val _searchQuery = MutableStateFlow("")
@@ -23,15 +25,6 @@ class FilesViewModel(private val repository: DocRepository) : ViewModel() {
     val isSearchActive = _isSearchActive.asStateFlow()
     val searchQuery = _searchQuery.asStateFlow()
     val sortOption = _sortOption.asStateFlow()
-
-    private val _isGridMode = MutableStateFlow(false)
-    val isGridMode: StateFlow<Boolean> = _isGridMode.asStateFlow()
-
-    private val _selectedIds = MutableStateFlow<Set<Long>>(emptySet())
-    val selectedIds: StateFlow<Set<Long>> = _selectedIds.asStateFlow()
-
-    val selectionMode: StateFlow<Boolean> = _selectedIds.map { it.isNotEmpty() }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     private var currentCategory: String = "Todos"
 
@@ -63,48 +56,19 @@ class FilesViewModel(private val repository: DocRepository) : ViewModel() {
 
     fun onSearchTrigger() { _isSearchActive.value = true }
     fun onSearchQueryChange(query: String) { _searchQuery.value = query }
+
     fun onSearchClose() {
         _isSearchActive.value = false
         _searchQuery.value = ""
+        clearSelection()
     }
 
-    fun toggleFavorite(file: DocFile) {
-        viewModelScope.launch {
-            repository.toggleFavorite(file)
-            refresh()
-        }
-    }
+    // Sobrecargas corregidas
+    fun toggleFavorite(file: DocFile) = super.toggleFavorite(file) { refresh() }
+    fun renameFile(file: DocFile, newName: String) = super.renameFile(file, newName) { refresh() }
+    fun deleteFile(file: DocFile) = super.deleteFile(file) { refresh() }
+    fun deleteSelected() = super.deleteSelected(_allFiles.value) { refresh() }
+    fun selectAll() = super.selectAll(_allFiles.value)
 
-    fun renameFile(file: DocFile, newName: String) {
-        viewModelScope.launch {
-            repository.renameFile(file, newName)
-            refresh()
-        }
-    }
-
-    fun deleteFile(file: DocFile) {
-        viewModelScope.launch {
-            repository.deleteFiles(listOf(file))
-            refresh()
-        }
-    }
-
-    fun deleteSelected() {
-        val selected = _allFiles.value.filter { _selectedIds.value.contains(it.id) }
-        viewModelScope.launch {
-            repository.deleteFiles(selected)
-            clearSelection()
-            refresh()
-        }
-    }
-
-    fun toggleViewMode() { _isGridMode.value = !_isGridMode.value }
-    fun toggleSelection(fileId: Long) {
-        _selectedIds.update { current -> if (current.contains(fileId)) current - fileId else current + fileId }
-    }
-    fun selectAll() { _selectedIds.value = files.value.map { it.id }.toSet() }
-    fun clearSelection() { _selectedIds.value = emptySet() }
-
-    // Helper para compartir múltiple
-    fun getSelectedFiles(): List<DocFile> = _allFiles.value.filter { _selectedIds.value.contains(it.id) }
+    fun getSelectedFiles(): List<DocFile> = _allFiles.value.filter { selectedIds.value.contains(it.id) }
 }

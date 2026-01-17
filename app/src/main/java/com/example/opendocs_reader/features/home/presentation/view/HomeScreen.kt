@@ -59,12 +59,7 @@ fun HomeScreen(rootNavController: NavController) {
     val lifecycleOwner = LocalLifecycleOwner.current
     var showSortSheet by remember { mutableStateOf(false) }
 
-    // Estados para Menús y Diálogos
     var selectedFileForOptions by remember { mutableStateOf<DocFile?>(null) }
-    var activeActionFile by remember { mutableStateOf<DocFile?>(null) }
-    var showRenameDialog by remember { mutableStateOf(false) }
-    var showDeleteDialog by remember { mutableStateOf(false) }
-    var showPropertiesDialog by remember { mutableStateOf(false) }
     var showBatchDeleteDialog by remember { mutableStateOf(false) }
 
     val searchListState = rememberLazyListState()
@@ -89,60 +84,24 @@ fun HomeScreen(rootNavController: NavController) {
         if (isSearchActive) searchListState.scrollToItem(0)
     }
 
-    // --- Bottom Sheets y Diálogos ---
+    FileOperationManager(
+        context = context,
+        selectedFile = selectedFileForOptions,
+        onDismissSheet = { selectedFileForOptions = null },
+        showBatchDelete = showBatchDeleteDialog,
+        onDismissBatchDelete = { showBatchDeleteDialog = false },
+        selectedCount = selectedIds.size,
+        onFavorite = { viewModel.toggleFavorite(it) },
+        onRename = { file, name -> viewModel.renameFile(file, name) },
+        onDelete = { viewModel.deleteFile(it) },
+        onBatchDeleteConfirm = { viewModel.deleteSelected() }
+    )
+
     if (showSortSheet) {
         SortBottomSheet(
             currentSort = sortOption,
             onSortSelected = { viewModel.onSortChange(it); showSortSheet = false },
             onDismiss = { showSortSheet = false }
-        )
-    }
-
-    if (selectedFileForOptions != null) {
-        val file = selectedFileForOptions!!
-        FileOptionsSheet(
-            file = file,
-            onDismiss = { selectedFileForOptions = null },
-            onFavorite = { viewModel.toggleFavorite(file); selectedFileForOptions = null },
-            onShare = {
-                FileActionsUtils.shareFile(context, file)
-                selectedFileForOptions = null
-            },
-            onRename = { activeActionFile = file; showRenameDialog = true; selectedFileForOptions = null },
-            onDelete = { activeActionFile = file; showDeleteDialog = true; selectedFileForOptions = null },
-            onProperties = { activeActionFile = file; showPropertiesDialog = true; selectedFileForOptions = null },
-            onShortcut = {
-                FileActionsUtils.createShortcut(context, file)
-                selectedFileForOptions = null
-            }
-        )
-    }
-
-    if (showRenameDialog && activeActionFile != null) {
-        RenameFileDialog(
-            currentName = activeActionFile!!.name,
-            onDismiss = { showRenameDialog = false; activeActionFile = null },
-            onConfirm = { newName -> viewModel.renameFile(activeActionFile!!, newName); showRenameDialog = false; activeActionFile = null }
-        )
-    }
-
-    if (showDeleteDialog && activeActionFile != null) {
-        DeleteConfirmationDialog(
-            count = 1,
-            onDismiss = { showDeleteDialog = false; activeActionFile = null },
-            onConfirm = { viewModel.deleteFile(activeActionFile!!); showDeleteDialog = false; activeActionFile = null }
-        )
-    }
-
-    if (showPropertiesDialog && activeActionFile != null) {
-        FilePropertiesDialog(file = activeActionFile!!, onDismiss = { showPropertiesDialog = false; activeActionFile = null })
-    }
-
-    if (showBatchDeleteDialog) {
-        DeleteConfirmationDialog(
-            count = selectedIds.size,
-            onDismiss = { showBatchDeleteDialog = false },
-            onConfirm = { viewModel.deleteSelected(); showBatchDeleteDialog = false }
         )
     }
 
